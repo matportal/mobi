@@ -329,10 +329,11 @@ export class LoginManagerService {
   }
 
   private verifyAuth(validationStatus: {tokenExists: boolean; isExpired: boolean}): Observable<{valid: boolean, tokenExists: boolean, isExpired: boolean}>{
-    // If the token exists and is not expired, check the session
+    // In proxied SSO flows the UI token cookie may be absent/HttpOnly.
+    // Session validity should still be determined from the authenticated backend session.
     const tokenExists = validationStatus.tokenExists;
     const isExpired = validationStatus.isExpired;
-    if (!validationStatus.tokenExists || validationStatus.isExpired) {
+    if (validationStatus.isExpired) {
       return of({ 
           valid: false, 
           tokenExists,
