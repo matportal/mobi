@@ -83,6 +83,7 @@ import com.mobi.persistence.utils.BNodeUtils;
 import com.mobi.persistence.utils.Bindings;
 import com.mobi.persistence.utils.JSONQueryResults;
 import com.mobi.persistence.utils.RDFFiles;
+import com.mobi.persistence.utils.ResourceUtils;
 import com.mobi.persistence.utils.api.BNodeService;
 import com.mobi.repository.api.RepositoryManager;
 import com.mobi.rest.security.annotations.ActionAttributes;
@@ -573,7 +574,7 @@ public class OntologyRest {
                             Response.Status.BAD_REQUEST));
             Model entityModel = getModelForEntityInOntology(ontology, entityIdStr);
             Difference diff = differenceManager.getDiff(entityModel, getModelFromJson(entityJson));
-            Resource recordId = vf.createIRI(recordIdStr);
+            Resource recordId = createIri(recordIdStr);
             User user = getActiveUser(servletRequest, engineManager);
             Resource inProgressCommitIRI = getInProgressCommitIRI(user, recordId, conn, commitManager, configProvider);
             commitManager.updateInProgressCommit(configProvider.getLocalCatalogIRI(), recordId, inProgressCommitIRI,
@@ -641,7 +642,7 @@ public class OntologyRest {
         }
         try (RepositoryConnection conn = configProvider.getRepository().getConnection()) {
             Resource catalogIRI = configProvider.getLocalCatalogIRI();
-            IRI recordId = vf.createIRI(recordIdStr);
+            IRI recordId = createIri(recordIdStr);
 
             User user = getActiveUser(servletRequest, engineManager);
             Optional<InProgressCommit> commit = commitManager.getInProgressCommitOpt(catalogIRI, recordId, user,  conn);
@@ -654,10 +655,10 @@ public class OntologyRest {
             Resource commitId;
             if (StringUtils.isNotBlank(commitIdStr)) {
                 checkStringParam(branchIdStr, "The branchIdStr is missing.");
-                commitId = vf.createIRI(commitIdStr);
-                branchId = vf.createIRI(branchIdStr);
+                commitId = createIri(commitIdStr);
+                branchId = createIri(branchIdStr);
             } else if (StringUtils.isNotBlank(branchIdStr)) {
-                branchId = vf.createIRI(branchIdStr);
+                branchId = createIri(branchIdStr);
                 commitId = commitManager.getHeadCommit(catalogIRI, recordId, branchId, conn).getResource();
             } else {
                 MasterBranch branch = branchManager.getMasterBranch(catalogIRI, recordId, conn);
@@ -3089,7 +3090,7 @@ public class OntologyRest {
                     conn)
                     .orElseThrow(() -> ErrorUtils.sendError(ONTOLOGY_NOT_FOUND,
                             Response.Status.BAD_REQUEST));
-            Resource entityIRI = vf.createIRI(entityIRIStr);
+            Resource entityIRI = createIri(entityIRIStr);
             if (queryType.equals("construct")) {
                 Model results = ontology.constructEntityUsages(entityIRI);
                 return Response.ok(modelToJsonld(results)).build();
@@ -3312,7 +3313,7 @@ public class OntologyRest {
                     applyInProgressCommit, conn).orElseThrow(() -> ErrorUtils.sendError(
                             ONTOLOGY_NOT_FOUND, Response.Status.BAD_REQUEST));
 
-            IRI entity = vf.createIRI(entityIdStr);
+            IRI entity = createIri(entityIdStr);
             String queryString = GET_ENTITY_QUERY.replace("%ENTITY%", "<" + entity.stringValue() + ">");
 
             return getResponseBuilderForGraphQuery(ontology, queryString, includeImports, format.equals(JSONLD),
@@ -3380,7 +3381,7 @@ public class OntologyRest {
             JsonNode arrNode = mapper.readTree(filterJson).get("filterResources");
             if (arrNode != null && arrNode.isArray()) {
                 for (final JsonNode objNode : arrNode) {
-                    resources.add(vf.createIRI(objNode.asText()));
+                    resources.add(createIri(objNode.asText()));
                 }
             }
 
@@ -3530,12 +3531,12 @@ public class OntologyRest {
             @QueryParam("format") String format
     ) {
         try {
-            IRI ontIRI = vf.createIRI(ontologyIRI);
+            IRI ontIRI = createIri(ontologyIRI);
             Optional<Resource> ontologyRecord = this.importsResolver.getRecordIRIFromOntologyIRI(ontIRI);
 
             if (ontologyRecord.isEmpty()) {
                 String fileExt = "." + RDFFiles.getFileExtension(ontologyIRI);
-                ontIRI = vf.createIRI(ontologyIRI.replaceFirst(fileExt, ""));
+                ontIRI = createIri(ontologyIRI.replaceFirst(fileExt, ""));
                 ontologyRecord = this.importsResolver.getRecordIRIFromOntologyIRI(ontIRI);
             }
 
@@ -3570,13 +3571,13 @@ public class OntologyRest {
 
     private Decision isReadable(User user, IRI recordIRI) {
         IRI subjectId = (IRI) user.getResource();
-        IRI actionId = vf.createIRI("http://mobi.com/ontologies/policy#Read");
+        IRI actionId = createIri("http://mobi.com/ontologies/policy#Read");
         Map<String, Literal> attributes = new HashMap<>();
         Request request = pdp.createRequest(Collections.singletonList(subjectId), attributes,
                 Collections.singletonList(recordIRI), new HashMap<>(), Collections.singletonList(actionId), attributes);
 
         com.mobi.security.policy.api.Response response = pdp.evaluate(request,
-                vf.createIRI(POLICY_PERMIT_OVERRIDES));
+                createIri(POLICY_PERMIT_OVERRIDES));
 
         return response.getDecision();
     }
@@ -3736,18 +3737,18 @@ public class OntologyRest {
         checkStringParam(recordIdStr, "The recordIdStr is missing.");
         Optional<Ontology> optionalOntology;
         try {
-            Resource recordId = vf.createIRI(recordIdStr);
+            Resource recordId = createIri(recordIdStr);
 
             if (StringUtils.isNotBlank(commitIdStr)) {
                 if (StringUtils.isNotBlank(branchIdStr)) {
                     optionalOntology = ontologyManager.retrieveOntology(recordId,
-                            vf.createIRI(branchIdStr), vf.createIRI(commitIdStr));
+                            createIri(branchIdStr), createIri(commitIdStr));
                 } else {
                     optionalOntology = ontologyManager.retrieveOntologyByCommit(recordId,
-                            vf.createIRI(commitIdStr));
+                            createIri(commitIdStr));
                 }
             } else if (StringUtils.isNotBlank(branchIdStr)) {
-                optionalOntology = ontologyManager.retrieveOntology(recordId, vf.createIRI(branchIdStr));
+                optionalOntology = ontologyManager.retrieveOntology(recordId, createIri(branchIdStr));
             } else {
                 optionalOntology = ontologyManager.retrieveOntology(recordId);
             }
@@ -3755,7 +3756,7 @@ public class OntologyRest {
             if (optionalOntology.isPresent() && applyInProgressCommit) {
                 User user = getActiveUser(servletRequest, engineManager);
                 Optional<InProgressCommit> inProgressCommitOpt = commitManager.getInProgressCommitOpt(
-                        configProvider.getLocalCatalogIRI(), vf.createIRI(recordIdStr), user, conn);
+                        configProvider.getLocalCatalogIRI(), createIri(recordIdStr), user, conn);
 
                 if (inProgressCommitOpt.isPresent()) {
                     optionalOntology = Optional.of(ontologyManager.applyChanges(optionalOntology.get(),
@@ -4325,7 +4326,7 @@ public class OntologyRest {
     private Response additionsToInProgressCommit(HttpServletRequest servletRequest, String recordIdStr,
                                                  Model entityModel, RepositoryConnection conn) {
         User user = getActiveUser(servletRequest, engineManager);
-        Resource recordId = vf.createIRI(recordIdStr);
+        Resource recordId = createIri(recordIdStr);
         Resource inProgressCommitIRI = getInProgressCommitIRI(user, recordId, conn, commitManager, configProvider);
         commitManager.updateInProgressCommit(configProvider.getLocalCatalogIRI(), recordId, inProgressCommitIRI,
                 entityModel, null, conn);
@@ -4346,10 +4347,10 @@ public class OntologyRest {
     private Response deletionsToInProgressCommit(HttpServletRequest servletRequest, Ontology ontology,
                                                  String entityIdStr, String recordIdStr, RepositoryConnection conn) {
         User user = getActiveUser(servletRequest, engineManager);
-        Resource recordId = vf.createIRI(recordIdStr);
+        Resource recordId = createIri(recordIdStr);
         Resource inProgressCommitIRI = getInProgressCommitIRI(user, recordId, conn, commitManager, configProvider);
         Model ontologyModel = ontology.asModel();
-        Resource entityId = vf.createIRI(entityIdStr);
+        Resource entityId = createIri(entityIdStr);
         Model model = mf.createEmptyModel();
         model.addAll(ontologyModel.stream()
                 .filter(statement -> statement.getSubject().equals(entityId)
@@ -4375,7 +4376,7 @@ public class OntologyRest {
         Model ontologyModel = ontology.asModel();
         Model temp = mf.createEmptyModel();
         temp.addAll(ontologyModel);
-        return temp.filter(vf.createIRI(entityIdStr), null, null);
+        return temp.filter(createIri(entityIdStr), null, null);
     }
 
     /**
@@ -4439,7 +4440,7 @@ public class OntologyRest {
                     new IllegalStateException("Record must have a master branch"));
 
             RepositoryResult<Statement> commitStmt = conn.getStatements(branchId,
-                    vf.createIRI(Branch.head_IRI), null);
+                    createIri(Branch.head_IRI), null);
             if (!commitStmt.hasNext()) {
                 commitStmt.close();
                 throw ErrorUtils.sendError("The requested instance could not be found.",
@@ -4462,6 +4463,10 @@ public class OntologyRest {
         objectNode.put("commitId", commitId.toString());
 
         return Response.status(Response.Status.CREATED).entity(objectNode.toString()).build();
+    }
+
+    private IRI createIri(String value) {
+        return vf.createIRI(ResourceUtils.decode(value));
     }
 
     /**
