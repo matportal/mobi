@@ -85,6 +85,7 @@ import com.mobi.exception.MobiException;
 import com.mobi.jaas.api.engines.EngineManager;
 import com.mobi.jaas.api.ontologies.usermanagement.User;
 import com.mobi.ontologies.dcterms._Thing;
+import com.mobi.persistence.utils.ResourceUtils;
 import com.mobi.persistence.utils.api.BNodeService;
 import com.mobi.rdf.orm.OrmFactory;
 import com.mobi.rdf.orm.OrmFactoryRegistry;
@@ -304,7 +305,7 @@ public class CatalogRest {
             @Parameter(description = "String representing the Catalog ID", required = true)
             @PathParam("catalogId") String catalogId) {
         try (RepositoryConnection conn = configProvider.getRepository().getConnection()) {
-            Resource catalogIri = vf.createIRI(catalogId);
+            Resource catalogIri = createIri(catalogId);
             if (catalogIri.equals(configProvider.getLocalCatalogIRI())) {
                 return Response.ok(thingToSkolemizedObjectNode(catalogManager.getLocalCatalog(conn),
                         Catalog.TYPE, bNodeService).toString()).build();
@@ -385,12 +386,12 @@ public class CatalogRest {
             if (recordTypes != null && !recordTypes.isEmpty()) {
                 builder.typeFilter(recordTypes.stream().map(vf::createIRI).collect(Collectors.toList()));
             } else {
-                builder.typeFilter(List.of(vf.createIRI(VersionedRDFRecord.TYPE)));
+                builder.typeFilter(List.of(createIri(VersionedRDFRecord.TYPE)));
             }
             if (keywords != null && !keywords.isEmpty()) {
                 builder.keywords(keywords);
             }
-            PaginatedSearchResults<EntityMetadata> searchResults = recordManager.findEntities(vf.createIRI(catalogId),
+            PaginatedSearchResults<EntityMetadata> searchResults = recordManager.findEntities(createIri(catalogId),
                     builder.build(), activeUser, conn);
 
             ArrayNode entities = mapper.createArrayNode();
@@ -481,7 +482,7 @@ public class CatalogRest {
                 builder.limit(limit);
             }
             if (sort != null) {
-                builder.sortBy(vf.createIRI(sort));
+                builder.sortBy(createIri(sort));
             }
             if (recordTypes != null && !recordTypes.isEmpty()) {
                 builder.typeFilter(recordTypes.stream().map(vf::createIRI).collect(Collectors.toList()));
@@ -495,7 +496,7 @@ public class CatalogRest {
             if (creators != null && !creators.isEmpty()) {
                 builder.creators(creators.stream().map(vf::createIRI).collect(Collectors.toList()));
             }
-            PaginatedSearchResults<Record> records = recordManager.findRecord(vf.createIRI(catalogId),
+            PaginatedSearchResults<Record> records = recordManager.findRecord(createIri(catalogId),
                     builder.build(), getActiveUser(servletRequest, engineManager), conn);
             return createPaginatedResponse(uriInfo, records.page(), records.totalSize(), limit, offset,
                     Record.TYPE, bNodeService);
@@ -539,7 +540,7 @@ public class CatalogRest {
             @Parameter(description = "String representing the Record ID", required = true)
             @PathParam("recordId") String recordId) {
         try (RepositoryConnection conn = configProvider.getRepository().getConnection()) {
-            Record record = recordManager.getRecordOpt(vf.createIRI(catalogId), vf.createIRI(recordId),
+            Record record = recordManager.getRecordOpt(createIri(catalogId), createIri(recordId),
                     factoryRegistry.getFactoryOfType(Record.class).get(), conn).orElseThrow(() ->
                     ErrorUtils.sendError("Record " + recordId + COULD_NOT_BE_FOUND, Response.Status.NOT_FOUND));
             return Response.ok(modelToSkolemizedJsonld(removeContext(record.getModel()),
@@ -585,9 +586,9 @@ public class CatalogRest {
             @Parameter(description = "String representing the Record ID", required = true)
             @PathParam("recordId") String recordId) {
         User activeUser = getActiveUser(servletRequest, engineManager);
-        IRI recordIri = vf.createIRI(recordId);
+        IRI recordIri = createIri(recordId);
         try (RepositoryConnection conn = configProvider.getRepository().getConnection()) {
-            recordManager.removeRecord(vf.createIRI(catalogId), recordIri, activeUser, Record.class, conn);
+            recordManager.removeRecord(createIri(catalogId), recordIri, activeUser, Record.class, conn);
             return Response.ok().build();
         } catch (IllegalArgumentException ex) {
             throw ErrorUtils.sendError(ex, ex.getMessage(), Response.Status.BAD_REQUEST);
@@ -635,9 +636,9 @@ public class CatalogRest {
                     required = true)
                     String newRecordJson) {
         try (RepositoryConnection conn = configProvider.getRepository().getConnection()) {
-            Record newRecord = getNewThing(newRecordJson, vf.createIRI(recordId),
+            Record newRecord = getNewThing(newRecordJson, createIri(recordId),
                     factoryRegistry.getFactoryOfType(Record.class).get());
-            recordManager.updateRecord(vf.createIRI(catalogId), newRecord, conn);
+            recordManager.updateRecord(createIri(catalogId), newRecord, conn);
             return Response.ok(modelToSkolemizedJsonld(removeContext(newRecord.getModel()),
                     bNodeService)).build();
         } catch (IllegalArgumentException ex) {
@@ -683,7 +684,7 @@ public class CatalogRest {
             OrmFactory<Record> factoryOfType = factoryRegistry.getFactoryOfType(Record.class).orElseThrow(() ->
                     ErrorUtils.sendError("Factory Of Type Record could not be found",
                             Response.Status.INTERNAL_SERVER_ERROR));
-            Record record = recordManager.getRecordOpt(vf.createIRI(catalogId), vf.createIRI(recordId),
+            Record record = recordManager.getRecordOpt(createIri(catalogId), createIri(recordId),
                     factoryOfType, conn).orElseThrow(() ->
                     ErrorUtils.sendError("Record " + recordId + COULD_NOT_BE_FOUND, Response.Status.NOT_FOUND));
             RecordService<?> recordService = recordManager.getRecordService(record.getResource(), conn);
@@ -755,7 +756,7 @@ public class CatalogRest {
                 builder.searchText(searchText);
             }
 
-            PaginatedSearchResults<KeywordCount> keywordCounts = recordManager.getKeywords(vf.createIRI(catalogId),
+            PaginatedSearchResults<KeywordCount> keywordCounts = recordManager.getKeywords(createIri(catalogId),
                     builder.build(), conn);
 
             ArrayNode keywordsArrayNode = serializeKeywordCount(keywordCounts);
@@ -832,9 +833,9 @@ public class CatalogRest {
             @DefaultValue("true") @QueryParam("ascending") boolean asc) {
         try (RepositoryConnection conn = configProvider.getRepository().getConnection()) {
             validatePaginationParams(sort, SORT_RESOURCES, limit, offset);
-            Set<Distribution> distributions = distributionManager.getUnversionedDistributions(vf.createIRI(catalogId),
-                    vf.createIRI(recordId), conn);
-            return createPaginatedThingResponse(uriInfo, distributions, vf.createIRI(sort), offset,
+            Set<Distribution> distributions = distributionManager.getUnversionedDistributions(createIri(catalogId),
+                    createIri(recordId), conn);
+            return createPaginatedThingResponse(uriInfo, distributions, createIri(sort), offset,
                     limit, asc, null,
                     Distribution.TYPE, bNodeService);
         } catch (IllegalArgumentException ex) {
@@ -901,7 +902,7 @@ public class CatalogRest {
         try (RepositoryConnection conn = configProvider.getRepository().getConnection()) {
             Distribution newDistribution = createDistribution(title, description, format, accessURL, downloadURL,
                     servletRequest);
-            distributionManager.addUnversionedDistribution(vf.createIRI(catalogId), vf.createIRI(recordId),
+            distributionManager.addUnversionedDistribution(createIri(catalogId), createIri(recordId),
                     newDistribution, conn);
             return Response.status(201).entity(newDistribution.getResource().stringValue()).build();
         } catch (IllegalArgumentException ex) {
@@ -946,8 +947,8 @@ public class CatalogRest {
             @Parameter(description = "String representing the Distribution ID", required = true)
             @PathParam("distributionId") String distributionId) {
         try (RepositoryConnection conn = configProvider.getRepository().getConnection()) {
-            Distribution distribution = distributionManager.getUnversionedDistribution(vf.createIRI(catalogId),
-                    vf.createIRI(recordId), vf.createIRI(distributionId), conn);
+            Distribution distribution = distributionManager.getUnversionedDistribution(createIri(catalogId),
+                    createIri(recordId), createIri(distributionId), conn);
             return Response.ok(thingToSkolemizedObjectNode(distribution, Distribution.TYPE, bNodeService)
                     .toString()).build();
         } catch (IllegalArgumentException ex) {
@@ -992,8 +993,8 @@ public class CatalogRest {
             @Parameter(description = "String representing the Distribution ID", required = true)
             @PathParam("distributionId") String distributionId) {
         try (RepositoryConnection conn = configProvider.getRepository().getConnection()) {
-            distributionManager.removeUnversionedDistribution(vf.createIRI(catalogId), vf.createIRI(recordId),
-                    vf.createIRI(distributionId), conn);
+            distributionManager.removeUnversionedDistribution(createIri(catalogId), createIri(recordId),
+                    createIri(distributionId), conn);
             return Response.ok().build();
         } catch (IllegalArgumentException ex) {
             throw ErrorUtils.sendError(ex, ex.getMessage(), Response.Status.BAD_REQUEST);
@@ -1042,9 +1043,9 @@ public class CatalogRest {
             @Parameter(description = "JSON-LD of the new Distribution which will replace the existing Distribution",
                     required = true) String newDistributionJson) {
         try (RepositoryConnection conn = configProvider.getRepository().getConnection()) {
-            Distribution newDistribution = getNewThing(newDistributionJson, vf.createIRI(distributionId),
+            Distribution newDistribution = getNewThing(newDistributionJson, createIri(distributionId),
                     distributionFactory);
-            distributionManager.updateUnversionedDistribution(vf.createIRI(catalogId), vf.createIRI(recordId),
+            distributionManager.updateUnversionedDistribution(createIri(catalogId), createIri(recordId),
                     newDistribution, conn);
             return Response.ok().build();
         } catch (IllegalArgumentException ex) {
@@ -1101,8 +1102,8 @@ public class CatalogRest {
             @DefaultValue("true") @QueryParam("ascending") boolean asc) {
         try (RepositoryConnection conn = configProvider.getRepository().getConnection()) {
             validatePaginationParams(sort, SORT_RESOURCES, limit, offset);
-            Set<Version> versions = versionManager.getVersions(vf.createIRI(catalogId), vf.createIRI(recordId), conn);
-            return createPaginatedThingResponse(uriInfo, versions, vf.createIRI(sort), offset, limit,
+            Set<Version> versions = versionManager.getVersions(createIri(catalogId), createIri(recordId), conn);
+            return createPaginatedThingResponse(uriInfo, versions, createIri(sort), offset, limit,
                     asc, null, Version.TYPE, bNodeService);
         } catch (IllegalArgumentException ex) {
             throw ErrorUtils.sendError(ex, ex.getMessage(), Response.Status.BAD_REQUEST);
@@ -1172,8 +1173,8 @@ public class CatalogRest {
 
             Version newVersion = versionManager.createVersion(title, description, versionFactories.get(typeIRI));
             newVersion.setProperty(getActiveUser(servletRequest, engineManager).getResource(),
-                    vf.createIRI(DCTERMS.PUBLISHER.stringValue()));
-            versionManager.addVersion(vf.createIRI(catalogId), vf.createIRI(recordId), newVersion, conn);
+                    createIri(DCTERMS.PUBLISHER.stringValue()));
+            versionManager.addVersion(createIri(catalogId), createIri(recordId), newVersion, conn);
             return Response.status(201).entity(newVersion.getResource().stringValue()).build();
         } catch (IllegalArgumentException ex) {
             throw ErrorUtils.sendError(ex, ex.getMessage(), Response.Status.BAD_REQUEST);
@@ -1242,9 +1243,9 @@ public class CatalogRest {
             checkStringParam(iri, "Tag iri is required");
             checkStringParam(title, "Tag title is required");
             checkStringParam(commitId, "Tag commit is required");
-            IRI recordIri = vf.createIRI(recordId);
-            IRI commitIri = vf.createIRI(commitId);
-            IRI tagIri = vf.createIRI(iri);
+            IRI recordIri = createIri(recordId);
+            IRI commitIri = createIri(commitId);
+            IRI tagIri = createIri(iri);
             if (!commitManager.commitInRecord(recordIri, commitIri, conn)) {
                 throw new IllegalArgumentException(COMMIT + commitId + " is not in record " + recordId);
             }
@@ -1252,16 +1253,16 @@ public class CatalogRest {
                     new IllegalStateException("Tag Factory not found"));
             OffsetDateTime now = OffsetDateTime.now();
             Tag tag = factory.createNew(tagIri);
-            tag.setProperty(vf.createLiteral(title), vf.createIRI(_Thing.title_IRI));
+            tag.setProperty(vf.createLiteral(title), createIri(_Thing.title_IRI));
             if (description != null) {
-                tag.setProperty(vf.createLiteral(description), vf.createIRI(_Thing.description_IRI));
+                tag.setProperty(vf.createLiteral(description), createIri(_Thing.description_IRI));
             }
-            tag.setProperty(vf.createLiteral(now), vf.createIRI(_Thing.issued_IRI));
-            tag.setProperty(vf.createLiteral(now), vf.createIRI(_Thing.modified_IRI));
+            tag.setProperty(vf.createLiteral(now), createIri(_Thing.issued_IRI));
+            tag.setProperty(vf.createLiteral(now), createIri(_Thing.modified_IRI));
             tag.setProperty(getActiveUser(servletRequest, engineManager).getResource(),
-                    vf.createIRI(DCTERMS.PUBLISHER.stringValue()));
+                    createIri(DCTERMS.PUBLISHER.stringValue()));
             tag.setCommit(commitFactory.createNew(commitIri));
-            versionManager.addVersion(vf.createIRI(catalogId), recordIri, tag, conn);
+            versionManager.addVersion(createIri(catalogId), recordIri, tag, conn);
             return Response.status(201).entity(tag.getResource().stringValue()).build();
         } catch (IllegalArgumentException ex) {
             throw RestUtils.getErrorObjBadRequest(ex);
@@ -1301,7 +1302,7 @@ public class CatalogRest {
             @Parameter(description = "String representing the VersionedRecord ID", required = true)
             @PathParam("recordId") String recordId) {
         try (RepositoryConnection conn = configProvider.getRepository().getConnection()) {
-            Version version = versionManager.getLatestVersion(vf.createIRI(catalogId), vf.createIRI(recordId),
+            Version version = versionManager.getLatestVersion(createIri(catalogId), createIri(recordId),
                     factoryRegistry.getFactoryOfType(Version.class).get(), conn).orElseThrow(() ->
                     ErrorUtils.sendError("Latest Version could not be found", Response.Status.NOT_FOUND));
             return Response.ok(thingToSkolemizedObjectNode(version, Version.TYPE, bNodeService)
@@ -1348,8 +1349,8 @@ public class CatalogRest {
             @Parameter(description = "String representing the VersionedRecord ID", required = true)
             @PathParam("versionId") String versionId) {
         try (RepositoryConnection conn = configProvider.getRepository().getConnection()) {
-            Version version = versionManager.getVersion(vf.createIRI(catalogId), vf.createIRI(recordId),
-                    vf.createIRI(versionId), factoryRegistry.getFactoryOfType(Version.class)
+            Version version = versionManager.getVersion(createIri(catalogId), createIri(recordId),
+                    createIri(versionId), factoryRegistry.getFactoryOfType(Version.class)
                             .orElseThrow(() -> new IllegalArgumentException("Version factory not found")), conn);
             return Response.ok(thingToSkolemizedObjectNode(version, Version.TYPE, bNodeService)
                     .toString()).build();
@@ -1399,7 +1400,7 @@ public class CatalogRest {
             @Parameter(description = "String representing the VersionedRecord ID", required = true)
             @PathParam("versionId") String versionId) {
         try (RepositoryConnection conn = configProvider.getRepository().getConnection()) {
-            versionManager.removeVersion(vf.createIRI(catalogId), vf.createIRI(recordId), vf.createIRI(versionId),
+            versionManager.removeVersion(createIri(catalogId), createIri(recordId), createIri(versionId),
                     conn);
             return Response.ok().build();
         } catch (IllegalArgumentException ex) {
@@ -1452,9 +1453,9 @@ public class CatalogRest {
                     required = true)
                     String newVersionJson) {
         try (RepositoryConnection conn = configProvider.getRepository().getConnection()) {
-            Version newVersion = getNewThing(newVersionJson, vf.createIRI(versionId),
+            Version newVersion = getNewThing(newVersionJson, createIri(versionId),
                     factoryRegistry.getFactoryOfType(Version.class).get());
-            versionManager.updateVersion(vf.createIRI(catalogId), vf.createIRI(recordId), newVersion, conn);
+            versionManager.updateVersion(createIri(catalogId), createIri(recordId), newVersion, conn);
             return Response.ok().build();
         } catch (IllegalArgumentException ex) {
             throw ErrorUtils.sendError(ex, ex.getMessage(), Response.Status.BAD_REQUEST);
@@ -1514,9 +1515,9 @@ public class CatalogRest {
             @DefaultValue("true") @QueryParam("ascending") boolean asc) {
         try (RepositoryConnection conn = configProvider.getRepository().getConnection()) {
             validatePaginationParams(sort, SORT_RESOURCES, limit, offset);
-            Set<Distribution> distributions = distributionManager.getVersionedDistributions(vf.createIRI(catalogId),
-                    vf.createIRI(recordId), vf.createIRI(versionId), conn);
-            return createPaginatedThingResponse(uriInfo, distributions, vf.createIRI(sort), offset,
+            Set<Distribution> distributions = distributionManager.getVersionedDistributions(createIri(catalogId),
+                    createIri(recordId), createIri(versionId), conn);
+            return createPaginatedThingResponse(uriInfo, distributions, createIri(sort), offset,
                     limit, asc, null,
                     Distribution.TYPE, bNodeService);
         } catch (IllegalArgumentException ex) {
@@ -1587,8 +1588,8 @@ public class CatalogRest {
         try (RepositoryConnection conn = configProvider.getRepository().getConnection()) {
             Distribution newDistribution = createDistribution(title, description, format, accessURL, downloadURL,
                     servletRequest);
-            distributionManager.addVersionedDistribution(vf.createIRI(catalogId), vf.createIRI(recordId),
-                    vf.createIRI(versionId), newDistribution, conn);
+            distributionManager.addVersionedDistribution(createIri(catalogId), createIri(recordId),
+                    createIri(versionId), newDistribution, conn);
             return Response.status(201).entity(newDistribution.getResource().stringValue()).build();
         } catch (IllegalArgumentException ex) {
             throw ErrorUtils.sendError(ex, ex.getMessage(), Response.Status.BAD_REQUEST);
@@ -1636,8 +1637,8 @@ public class CatalogRest {
             @Parameter(description = "String representing the Distribution ID", required = true)
             @PathParam("distributionId") String distributionId) {
         try (RepositoryConnection conn = configProvider.getRepository().getConnection()) {
-            Distribution distribution = distributionManager.getVersionedDistribution(vf.createIRI(catalogId),
-                    vf.createIRI(recordId), vf.createIRI(versionId), vf.createIRI(distributionId), conn);
+            Distribution distribution = distributionManager.getVersionedDistribution(createIri(catalogId),
+                    createIri(recordId), createIri(versionId), createIri(distributionId), conn);
             return Response.ok(thingToSkolemizedObjectNode(distribution, Distribution.TYPE, bNodeService)
                     .toString()).build();
         } catch (IllegalArgumentException ex) {
@@ -1686,8 +1687,8 @@ public class CatalogRest {
             @Parameter(description = "String representing the Distribution ID", required = true)
             @PathParam("distributionId") String distributionId) {
         try (RepositoryConnection conn = configProvider.getRepository().getConnection()) {
-            distributionManager.removeVersionedDistribution(vf.createIRI(catalogId), vf.createIRI(recordId),
-                    vf.createIRI(versionId), vf.createIRI(distributionId), conn);
+            distributionManager.removeVersionedDistribution(createIri(catalogId), createIri(recordId),
+                    createIri(versionId), createIri(distributionId), conn);
             return Response.ok().build();
         } catch (IllegalArgumentException ex) {
             throw ErrorUtils.sendError(ex, ex.getMessage(), Response.Status.BAD_REQUEST);
@@ -1740,10 +1741,10 @@ public class CatalogRest {
             @Parameter(description = "JSON-LD of the new Distribution which will replace the existing Distribution", required = true)
                     String newDistributionJson) {
         try (RepositoryConnection conn = configProvider.getRepository().getConnection()) {
-            Distribution newDistribution = getNewThing(newDistributionJson, vf.createIRI(distributionId),
+            Distribution newDistribution = getNewThing(newDistributionJson, createIri(distributionId),
                     distributionFactory);
-            distributionManager.updateVersionedDistribution(vf.createIRI(catalogId), vf.createIRI(recordId),
-                    vf.createIRI(versionId), newDistribution, conn);
+            distributionManager.updateVersionedDistribution(createIri(catalogId), createIri(recordId),
+                    createIri(versionId), newDistribution, conn);
             return Response.ok().build();
         } catch (IllegalArgumentException ex) {
             throw ErrorUtils.sendError(ex, ex.getMessage(), Response.Status.BAD_REQUEST);
@@ -1789,8 +1790,8 @@ public class CatalogRest {
             @DefaultValue("jsonld") @QueryParam("format") String format) {
         long start = System.currentTimeMillis();
         try (RepositoryConnection conn = configProvider.getRepository().getConnection()) {
-            Commit commit = commitManager.getTaggedCommit(vf.createIRI(catalogId), vf.createIRI(recordId),
-                    vf.createIRI(versionId), conn);
+            Commit commit = commitManager.getTaggedCommit(createIri(catalogId), createIri(recordId),
+                    createIri(versionId), conn);
             return createCommitResponse(commit, differenceManager.getCommitDifference(commit.getResource(), conn),
                     format, bNodeService);
         } catch (IllegalArgumentException ex) {
@@ -1856,20 +1857,20 @@ public class CatalogRest {
             @DefaultValue("false") @QueryParam("applyUserFilter") boolean applyUserFilter) {
         try (RepositoryConnection conn = configProvider.getRepository().getConnection()) {
             validatePaginationParams(sort, SORT_RESOURCES, limit, offset);
-            Set<Branch> branches = branchManager.getBranches(vf.createIRI(catalogId), vf.createIRI(recordId), conn);
+            Set<Branch> branches = branchManager.getBranches(createIri(catalogId), createIri(recordId), conn);
             Function<Branch, Boolean> filterFunction = null;
             if (applyUserFilter) {
                 User activeUser = getActiveUser(servletRequest, engineManager);
                 filterFunction = branch -> {
-                    Set<String> types = branch.getProperties(vf.createIRI(RDF.TYPE.stringValue())).stream()
+                    Set<String> types = branch.getProperties(createIri(RDF.TYPE.stringValue())).stream()
                             .map(Value::stringValue)
                             .collect(Collectors.toSet());
                     return !types.contains(UserBranch.TYPE)
-                            || branch.getProperty(vf.createIRI(DCTERMS.PUBLISHER.stringValue())).get()
+                            || branch.getProperty(createIri(DCTERMS.PUBLISHER.stringValue())).get()
                             .stringValue().equals(activeUser.getResource().stringValue());
                 };
             }
-            return createPaginatedThingResponse(uriInfo, branches, vf.createIRI(sort), offset, limit,
+            return createPaginatedThingResponse(uriInfo, branches, createIri(sort), offset, limit,
                     asc, filterFunction,
                     Branch.TYPE, bNodeService);
         } catch (IllegalArgumentException ex) {
@@ -1935,8 +1936,8 @@ public class CatalogRest {
         try (RepositoryConnection conn = configProvider.getRepository().getConnection()) {
             checkStringParam(title, "Branch title is required");
             checkStringParam(commitId, "Commit ID is required");
-            IRI recordIri = vf.createIRI(recordId);
-            IRI commitIri = vf.createIRI(commitId);
+            IRI recordIri = createIri(recordId);
+            IRI commitIri = createIri(commitId);
             if (!commitManager.commitInRecord(recordIri, commitIri, conn)) {
                 throw ErrorUtils.sendError("Commit not in Record", Response.Status.BAD_REQUEST);
             }
@@ -1947,12 +1948,12 @@ public class CatalogRest {
 
             Branch newBranch = branchManager.createBranch(title, description, branchFactories.get(typeIRI));
             newBranch.setProperty(getActiveUser(servletRequest, engineManager).getResource(),
-                    vf.createIRI(DCTERMS.PUBLISHER.stringValue()));
+                    createIri(DCTERMS.PUBLISHER.stringValue()));
             Commit newCommit = commitManager.getCommit(commitIri, conn)
                     .orElseThrow(() -> ErrorUtils.sendError(COMMIT + commitId + COULD_NOT_BE_FOUND,
                             Response.Status.BAD_REQUEST));
             newBranch.setHead(newCommit);
-            branchManager.addBranch(vf.createIRI(catalogId), vf.createIRI(recordId), newBranch, conn);
+            branchManager.addBranch(createIri(catalogId), createIri(recordId), newBranch, conn);
             return Response.status(201).entity(newBranch.getResource().stringValue()).build();
         } catch (IllegalArgumentException ex) {
             throw ErrorUtils.sendError(ex, ex.getMessage(), Response.Status.BAD_REQUEST);
@@ -2001,8 +2002,8 @@ public class CatalogRest {
         try (RepositoryConnection conn = configProvider.getRepository().getConnection()) {
             OrmFactory<Branch> branchOrmFactory = factoryRegistry.getFactoryOfType(Branch.class)
                     .orElseThrow(() -> new MobiException("Branch factory not found"));
-            Resource branchIRI = vf.createIRI(checkBranchId(catalogId, recordId, branchId, conn));
-            Branch branch = branchManager.getBranch(vf.createIRI(catalogId), vf.createIRI(recordId),
+            Resource branchIRI = createIri(checkBranchId(catalogId, recordId, branchId, conn));
+            Branch branch = branchManager.getBranch(createIri(catalogId), createIri(recordId),
                     branchIRI, branchOrmFactory, conn);
             return Response.ok(thingToSkolemizedObjectNode(branch, Branch.TYPE, bNodeService)
                     .toString()).build();
@@ -2055,8 +2056,8 @@ public class CatalogRest {
                     required = true)
             @PathParam("branchId") String branchId) {
         try (RepositoryConnection conn = configProvider.getRepository().getConnection()) {
-            Resource deleteBranchIRI = vf.createIRI(checkBranchId(catalogId, recordId, branchId, conn));
-            branchManager.removeBranch(vf.createIRI(catalogId), vf.createIRI(recordId), deleteBranchIRI, conn);
+            Resource deleteBranchIRI = createIri(checkBranchId(catalogId, recordId, branchId, conn));
+            branchManager.removeBranch(createIri(catalogId), createIri(recordId), deleteBranchIRI, conn);
             return Response.ok().build();
         } catch (IllegalArgumentException ex) {
             throw ErrorUtils.sendError(ex, ex.getMessage(), Response.Status.BAD_REQUEST);
@@ -2109,10 +2110,10 @@ public class CatalogRest {
             @Parameter(description = "String representing the Branch JSON", required = true)
                 String newBranchJson) {
         try (RepositoryConnection conn = configProvider.getRepository().getConnection()) {
-            Resource branchIRI = vf.createIRI(checkBranchId(catalogId, recordId, branchId, conn));
+            Resource branchIRI = createIri(checkBranchId(catalogId, recordId, branchId, conn));
             Branch newBranch = getNewThing(newBranchJson, branchIRI,
                     factoryRegistry.getFactoryOfType(Branch.class).get());
-            branchManager.updateBranch(vf.createIRI(catalogId), vf.createIRI(recordId), newBranch, conn);
+            branchManager.updateBranch(createIri(catalogId), createIri(recordId), newBranch, conn);
             return Response.ok().build();
         } catch (IllegalArgumentException ex) {
             throw ErrorUtils.sendError(ex, ex.getMessage(), Response.Status.BAD_REQUEST);
@@ -2188,12 +2189,12 @@ public class CatalogRest {
             final List<Commit> commits;
             branchId = checkBranchId(catalogId, recordId, branchId, conn);
             if (StringUtils.isBlank(targetId)) {
-                commits = commitManager.getCommitChain(vf.createIRI(catalogId), vf.createIRI(recordId),
-                        vf.createIRI(branchId), conn);
+                commits = commitManager.getCommitChain(createIri(catalogId), createIri(recordId),
+                        createIri(branchId), conn);
             } else {
                 targetId = checkBranchId(catalogId, recordId, targetId, conn);
-                commits = commitManager.getDifferenceChain(vf.createIRI(catalogId), vf.createIRI(recordId),
-                        vf.createIRI(branchId), vf.createIRI(targetId), conn);
+                commits = commitManager.getDifferenceChain(createIri(catalogId), createIri(recordId),
+                        createIri(branchId), createIri(targetId), conn);
             }
             Stream<Commit> result = commits.stream();
             if (limit > 0) {
@@ -2261,8 +2262,8 @@ public class CatalogRest {
             checkStringParam(message, "Commit message is required");
             User activeUser = getActiveUser(servletRequest, engineManager);
             try (RepositoryConnection conn = configProvider.getRepository().getConnection()) {
-                Resource resolvedBranchIRI = vf.createIRI(checkBranchId(catalogId, recordId, branchId, conn));
-                Resource newCommitId = versioningManager.commit(vf.createIRI(catalogId), vf.createIRI(recordId),
+                Resource resolvedBranchIRI = createIri(checkBranchId(catalogId, recordId, branchId, conn));
+                Resource newCommitId = versioningManager.commit(createIri(catalogId), createIri(recordId),
                         resolvedBranchIRI, activeUser, message, conn);
                 return Response.status(201).entity(newCommitId.stringValue()).build();
             }
@@ -2322,10 +2323,10 @@ public class CatalogRest {
             @DefaultValue("jsonld") @QueryParam("format") String format) {
         long start = System.currentTimeMillis();
         try (RepositoryConnection conn = configProvider.getRepository().getConnection()) {
-            Resource catalogIRI = vf.createIRI(catalogId);
-            Resource recordIRI = vf.createIRI(recordId);
-            Resource branchIRI = vf.createIRI(checkBranchId(catalogId, recordId, branchId, conn));
-            Resource commitIRI = vf.createIRI(checkCommitId(catalogId, recordId, branchIRI.stringValue(), commitId, conn));
+            Resource catalogIRI = createIri(catalogId);
+            Resource recordIRI = createIri(recordId);
+            Resource branchIRI = createIri(checkBranchId(catalogId, recordId, branchId, conn));
+            Resource commitIRI = createIri(checkCommitId(catalogId, recordId, branchIRI.stringValue(), commitId, conn));
             Commit commit = commitManager.getCommit(catalogIRI, recordIRI, branchIRI, commitIRI, conn).orElseThrow(() ->
                     ErrorUtils.sendError(COMMIT + commitIRI.stringValue() + COULD_NOT_BE_FOUND, Response.Status.NOT_FOUND));
             return createCommitResponse(commit, differenceManager.getCommitDifference(commit.getResource(), conn),
@@ -2392,10 +2393,10 @@ public class CatalogRest {
             @DefaultValue("jsonld") @QueryParam("format") String rdfFormat) {
         try (RepositoryConnection conn = configProvider.getRepository().getConnection()) {
             checkStringParam(targetBranchId, "Target branch is required");
-            Resource catalogIRI = vf.createIRI(catalogId);
-            Resource recordIRI = vf.createIRI(recordId);
-            Resource sourceBranchIRI = vf.createIRI(checkBranchId(catalogId, recordId, sourceBranchId, conn));
-            Resource targetBranchIRI = vf.createIRI(checkBranchId(catalogId, recordId, targetBranchId, conn));
+            Resource catalogIRI = createIri(catalogId);
+            Resource recordIRI = createIri(recordId);
+            Resource sourceBranchIRI = createIri(checkBranchId(catalogId, recordId, sourceBranchId, conn));
+            Resource targetBranchIRI = createIri(checkBranchId(catalogId, recordId, targetBranchId, conn));
             Commit sourceHead = commitManager.getHeadCommit(catalogIRI, recordIRI, sourceBranchIRI, conn);
             Commit targetHead = commitManager.getHeadCommit(catalogIRI, recordIRI, targetBranchIRI, conn);
             Difference diff = differenceManager.getDifference(sourceHead.getResource(), targetHead.getResource(), conn);
@@ -2463,10 +2464,10 @@ public class CatalogRest {
         long start = System.currentTimeMillis();
         try (RepositoryConnection conn = configProvider.getRepository().getConnection()) {
             checkStringParam(targetBranchId, "Target branch is required");
-            Resource catalogIRI = vf.createIRI(catalogId);
-            Resource recordIRI = vf.createIRI(recordId);
-            Resource sourceBranchIRI = vf.createIRI(checkBranchId(catalogId, recordId, branchId, conn));
-            Resource targetBranchIRI = vf.createIRI(checkBranchId(catalogId, recordId, targetBranchId, conn));
+            Resource catalogIRI = createIri(catalogId);
+            Resource recordIRI = createIri(recordId);
+            Resource sourceBranchIRI = createIri(checkBranchId(catalogId, recordId, branchId, conn));
+            Resource targetBranchIRI = createIri(checkBranchId(catalogId, recordId, targetBranchId, conn));
             Commit sourceHead = commitManager.getHeadCommit(catalogIRI, recordIRI, sourceBranchIRI, conn);
             Commit targetHead = commitManager.getHeadCommit(catalogIRI, recordIRI, targetBranchIRI, conn);
             Set<Conflict> conflicts = differenceManager.getConflicts(sourceHead.getResource(), targetHead.getResource(), conn);
@@ -2554,12 +2555,12 @@ public class CatalogRest {
             @FormParam("conflicts") String conflictsJson) {
         try (RepositoryConnection conn = configProvider.getRepository().getConnection()) {
             User activeUser = getActiveUser(servletRequest, engineManager);
-            Resource sourceBranchIRI = vf.createIRI(checkBranchId(catalogId, recordId, sourceBranchId, conn));
-            Resource targetBranchIRI = vf.createIRI(checkBranchId(catalogId, recordId, targetBranchId, conn));
+            Resource sourceBranchIRI = createIri(checkBranchId(catalogId, recordId, sourceBranchId, conn));
+            Resource targetBranchIRI = createIri(checkBranchId(catalogId, recordId, targetBranchId, conn));
             Model additions = StringUtils.isEmpty(additionsJson) ? null : convertJsonld(additionsJson);
             Model deletions = StringUtils.isEmpty(deletionsJson) ? null : convertJsonld(deletionsJson);
             Map<Resource, Conflict> conflicts = jsonToConflict(conflictsJson);
-            Resource newCommitId = versioningManager.merge(vf.createIRI(catalogId), vf.createIRI(recordId),
+            Resource newCommitId = versioningManager.merge(createIri(catalogId), createIri(recordId),
                     sourceBranchIRI, targetBranchIRI, activeUser, additions, deletions,
                     conflicts, conn);
             return Response.ok(newCommitId.stringValue()).build();
@@ -2627,16 +2628,16 @@ public class CatalogRest {
             @Parameter(description = "Boolean value identifying whether to skolemize blank nodes")
             @DefaultValue("true") @QueryParam("skolemize") boolean skolemize) {
         try (RepositoryConnection conn = configProvider.getRepository().getConnection()) {
-            Resource catalogIRI = vf.createIRI(catalogId);
-            Resource recordIRI = vf.createIRI(recordId);
+            Resource catalogIRI = createIri(catalogId);
+            Resource recordIRI = createIri(recordId);
             final Resource commitIRI;
             if (StringUtils.isNotEmpty(branchId)) {
-                Resource branchIRI = vf.createIRI(checkBranchId(catalogId, recordId, branchId, conn));
-                commitIRI = vf.createIRI(checkCommitId(catalogId, recordId, branchIRI.stringValue(), commitId, conn));
+                Resource branchIRI = createIri(checkBranchId(catalogId, recordId, branchId, conn));
+                commitIRI = createIri(checkCommitId(catalogId, recordId, branchIRI.stringValue(), commitId, conn));
                 commitManager.getCommit(catalogIRI, recordIRI, branchIRI, commitIRI, conn).orElseThrow(() ->
                         ErrorUtils.sendError(COMMIT + commitIRI.stringValue() + COULD_NOT_BE_FOUND, Response.Status.NOT_FOUND));
             } else {
-                commitIRI = vf.createIRI(commitId);
+                commitIRI = createIri(commitId);
                 commitManager.getCommit(commitIRI, conn).orElseThrow(() ->
                         ErrorUtils.sendError(COMMIT + commitIRI.stringValue() + COULD_NOT_BE_FOUND, Response.Status.NOT_FOUND));
             }
@@ -2724,10 +2725,10 @@ public class CatalogRest {
                     + "NOTE: Optional param - defaults to \"resource\"")
             @DefaultValue("resource") @QueryParam("fileName") String fileName) {
         try (RepositoryConnection conn = configProvider.getRepository().getConnection()) {
-            Resource catalogIRI = vf.createIRI(catalogId);
-            Resource recordIRI = vf.createIRI(recordId);
-            Resource branchIRI = vf.createIRI(checkBranchId(catalogId, recordId, branchId, conn));
-            Resource commitIRI = vf.createIRI(checkCommitId(catalogId, recordId, branchIRI.stringValue(), commitId, conn));
+            Resource catalogIRI = createIri(catalogId);
+            Resource recordIRI = createIri(recordId);
+            Resource branchIRI = createIri(checkBranchId(catalogId, recordId, branchId, conn));
+            Resource commitIRI = createIri(checkCommitId(catalogId, recordId, branchIRI.stringValue(), commitId, conn));
             commitManager.getCommit(catalogIRI, recordIRI, branchIRI, commitIRI, conn).orElseThrow(() ->
                     ErrorUtils.sendError(COMMIT + commitIRI.stringValue() + COULD_NOT_BE_FOUND, Response.Status.NOT_FOUND));
             Model resource;
@@ -2793,7 +2794,7 @@ public class CatalogRest {
         try (RepositoryConnection conn = configProvider.getRepository().getConnection()) {
             User activeUser = getActiveUser(servletRequest, engineManager);
             InProgressCommit inProgressCommit = commitManager.createInProgressCommit(activeUser);
-            commitManager.addInProgressCommit(vf.createIRI(catalogId), vf.createIRI(recordId), inProgressCommit, conn);
+            commitManager.addInProgressCommit(createIri(catalogId), createIri(recordId), inProgressCommit, conn);
             return Response.ok().build();
         } catch (IllegalArgumentException ex) {
             throw ErrorUtils.sendError(ex, ex.getMessage(), Response.Status.BAD_REQUEST);
@@ -2840,8 +2841,8 @@ public class CatalogRest {
             @DefaultValue("jsonld") @QueryParam("format") String format) {
         try (RepositoryConnection conn = configProvider.getRepository().getConnection()) {
             User activeUser = getActiveUser(servletRequest, engineManager);
-            InProgressCommit inProgressCommit = commitManager.getInProgressCommitOpt(vf.createIRI(catalogId),
-                    vf.createIRI(recordId), activeUser, conn).orElseThrow(() ->
+            InProgressCommit inProgressCommit = commitManager.getInProgressCommitOpt(createIri(catalogId),
+                    createIri(recordId), activeUser, conn).orElseThrow(() ->
                     ErrorUtils.sendError("InProgressCommit could not be found", Response.Status.NOT_FOUND));
             return Response.ok(getCommitDifferenceObject(inProgressCommit.getResource(), format, conn).toString(),
                     MediaType.APPLICATION_JSON).build();
@@ -2889,7 +2890,7 @@ public class CatalogRest {
             @PathParam("recordId") String recordId) {
         try (RepositoryConnection conn = configProvider.getRepository().getConnection()) {
             User activeUser = getActiveUser(servletRequest, engineManager);
-            commitManager.removeInProgressCommit(vf.createIRI(catalogId), vf.createIRI(recordId), activeUser, conn);
+            commitManager.removeInProgressCommit(createIri(catalogId), createIri(recordId), activeUser, conn);
             return Response.ok().build();
         } catch (IllegalArgumentException ex) {
             throw ErrorUtils.sendError(ex, ex.getMessage(), Response.Status.BAD_REQUEST);
@@ -2949,7 +2950,7 @@ public class CatalogRest {
             User activeUser = getActiveUser(servletRequest, engineManager);
             Model additions = StringUtils.isEmpty(additionsJson) ? null : convertJsonld(additionsJson);
             Model deletions = StringUtils.isEmpty(deletionsJson) ? null : convertJsonld(deletionsJson);
-            commitManager.updateInProgressCommit(vf.createIRI(catalogId), vf.createIRI(recordId), activeUser,
+            commitManager.updateInProgressCommit(createIri(catalogId), createIri(recordId), activeUser,
                     additions, deletions, conn);
             return Response.ok().build();
         } catch (IllegalArgumentException ex) {
@@ -3100,14 +3101,14 @@ public class CatalogRest {
             builder.format(format);
         }
         if (accessURL != null) {
-            builder.accessURL(vf.createIRI(accessURL));
+            builder.accessURL(createIri(accessURL));
         }
         if (downloadURL != null) {
-            builder.downloadURL(vf.createIRI(downloadURL));
+            builder.downloadURL(createIri(downloadURL));
         }
         Distribution distribution = distributionManager.createDistribution(builder.build());
         distribution.setProperty(getActiveUser(servletRequest, engineManager).getResource(),
-                vf.createIRI(DCTERMS.PUBLISHER.stringValue()));
+                createIri(DCTERMS.PUBLISHER.stringValue()));
         return distribution;
     }
 
@@ -3156,7 +3157,7 @@ public class CatalogRest {
             JsonNode arrNode = mapper.readTree(conflictsJson);
             if (arrNode != null && arrNode.isArray()) {
                 for (final JsonNode objNode : arrNode) {
-                    IRI iri = vf.createIRI(objNode.get("iri").asText());
+                    IRI iri = createIri(objNode.get("iri").asText());
                     Difference left = getDifference(objNode.get("left"));
                     Difference right = getDifference(objNode.get("right"));
                     Conflict conflict = new Conflict.Builder(iri)
@@ -3194,6 +3195,10 @@ public class CatalogRest {
 
     private Map<String, OrmFactory<? extends Record>> getRecordFactories() {
         return getThingFactories(Record.class);
+    }
+
+    private IRI createIri(String value) {
+        return vf.createIRI(ResourceUtils.decode(value));
     }
 
     private Map<String, OrmFactory<? extends Version>> getVersionFactories() {
@@ -3244,7 +3249,7 @@ public class CatalogRest {
      */
     private String checkBranchId(String catalogId, String recordId, String branchId, RepositoryConnection conn) {
         if ("master".equals(branchId.toLowerCase().trim())) {
-            MasterBranch branch = branchManager.getMasterBranch(vf.createIRI(catalogId), vf.createIRI(recordId), conn);
+            MasterBranch branch = branchManager.getMasterBranch(createIri(catalogId), createIri(recordId), conn);
             return branch.getResource().stringValue();
         } else {
             return branchId;
@@ -3267,8 +3272,8 @@ public class CatalogRest {
     private String checkCommitId(String catalogId, String recordId, String branchId, String commitId,
                                  RepositoryConnection conn) {
         if ("head".equals(commitId.toLowerCase().trim())) {
-            Commit headCommit = commitManager.getHeadCommit(vf.createIRI(catalogId), vf.createIRI(recordId),
-                    vf.createIRI(branchId), conn);
+            Commit headCommit = commitManager.getHeadCommit(createIri(catalogId), createIri(recordId),
+                    createIri(branchId), conn);
             return headCommit.getResource().stringValue();
         } else {
             return commitId;

@@ -41,6 +41,7 @@ import com.mobi.catalog.api.ontologies.mcat.Commit;
 import com.mobi.catalog.config.CatalogConfigProvider;
 import com.mobi.exception.MobiException;
 import com.mobi.jaas.api.engines.EngineManager;
+import com.mobi.persistence.utils.ResourceUtils;
 import com.mobi.persistence.utils.api.BNodeService;
 import com.mobi.rest.util.ErrorUtils;
 import com.mobi.rest.util.LinksUtils;
@@ -137,7 +138,7 @@ public class CommitRest {
             @DefaultValue("jsonld") @QueryParam("format") String format) {
         long start = System.currentTimeMillis();
         try (RepositoryConnection conn = configProvider.getRepository().getConnection()) {
-            Optional<Commit> optCommit = commitManager.getCommit(vf.createIRI(commitId), conn);
+            Optional<Commit> optCommit = commitManager.getCommit(createIri(commitId), conn);
 
             if (optCommit.isPresent()) {
                 return createCommitResponse(optCommit.get(), bNodeService);
@@ -205,14 +206,14 @@ public class CommitRest {
             final List<Commit> commits;
 
             if (StringUtils.isBlank(targetId) && StringUtils.isBlank(entityId)) {
-                commits = commitManager.getCommitChain(vf.createIRI(commitId), conn);
+                commits = commitManager.getCommitChain(createIri(commitId), conn);
             } else if (StringUtils.isNotBlank(targetId) && StringUtils.isBlank(entityId)) {
-                commits = commitManager.getCommitChain(vf.createIRI(commitId), vf.createIRI(targetId), conn);
+                commits = commitManager.getCommitChain(createIri(commitId), createIri(targetId), conn);
             } else if (StringUtils.isBlank(targetId) && StringUtils.isNotBlank(entityId)) {
-                commits = commitManager.getCommitEntityChain(vf.createIRI(commitId), vf.createIRI(entityId), conn);
+                commits = commitManager.getCommitEntityChain(createIri(commitId), createIri(entityId), conn);
             } else {
-                commits = commitManager.getCommitEntityChain(vf.createIRI(commitId), vf.createIRI(targetId),
-                        vf.createIRI(entityId), conn);
+                commits = commitManager.getCommitEntityChain(createIri(commitId), createIri(targetId),
+                        createIri(entityId), conn);
             }
 
             Stream<Commit> result = commits.stream();
@@ -276,9 +277,9 @@ public class CommitRest {
             checkStringParam(commitId, "Commit ID is required");
             Model model;
             if (StringUtils.isNotBlank(entityId)) {
-                model = compiledResourceManager.getCompiledResource(vf.createIRI(commitId), conn, vf.createIRI(entityId));
+                model = compiledResourceManager.getCompiledResource(createIri(commitId), conn, createIri(entityId));
             } else {
-                model = compiledResourceManager.getCompiledResource(vf.createIRI(commitId), conn);
+                model = compiledResourceManager.getCompiledResource(createIri(commitId), conn);
             }
 
             return Response.ok(modelToSkolemizedString(model, RDFFormat.JSONLD, bNodeService))
@@ -354,7 +355,7 @@ public class CommitRest {
             checkStringParam(sourceId, "Source commit is required");
 
             if (StringUtils.isBlank(targetId)) {
-                Optional<Commit> optCommit = commitManager.getCommit(vf.createIRI(sourceId), conn);
+                Optional<Commit> optCommit = commitManager.getCommit(createIri(sourceId), conn);
                 if (optCommit.isPresent()) {
                     if (limit == -1) {
                         return createCommitResponse(optCommit.get(),
@@ -373,13 +374,13 @@ public class CommitRest {
                 }
             } else {
                 if (limit == -1) {
-                    Difference diff = differenceManager.getDifference(vf.createIRI(sourceId), vf.createIRI(targetId),
+                    Difference diff = differenceManager.getDifference(createIri(sourceId), createIri(targetId),
                             conn);
                     return Response.ok(getDifferenceJsonString(diff, rdfFormat, bNodeService),
                             MediaType.APPLICATION_JSON).build();
                 } else {
                     PagedDifference pagedDifference = differenceManager.getCommitDifferencePaged(
-                            vf.createIRI(sourceId), vf.createIRI(targetId), limit, offset, conn);
+                            createIri(sourceId), createIri(targetId), limit, offset, conn);
                     return Response.ok(getDifferenceJsonString(pagedDifference.getDifference(),
                             rdfFormat, bNodeService),
                             MediaType.APPLICATION_JSON).header("Has-More-Results",
@@ -426,9 +427,9 @@ public class CommitRest {
         long start = System.currentTimeMillis();
         try (RepositoryConnection conn = configProvider.getRepository().getConnection()) {
             checkStringParam(sourceId, "Source commit is required");
-            Optional<Commit> optCommit = commitManager.getCommit(vf.createIRI(sourceId), conn);
+            Optional<Commit> optCommit = commitManager.getCommit(createIri(sourceId), conn);
             if (optCommit.isPresent()) {
-                Difference difference = differenceManager.getCommitDifferenceForSubject(vf.createIRI(subjectId),
+                Difference difference = differenceManager.getCommitDifferenceForSubject(createIri(subjectId),
                         optCommit.get().getResource(), conn);
                 return createCommitResponse(optCommit.get(), difference, rdfFormat, bNodeService);
             } else {
@@ -442,5 +443,9 @@ public class CommitRest {
         } finally {
             logger.trace("getDifference took {}ms", System.currentTimeMillis() - start);
         }
+    }
+
+    private IRI createIri(String value) {
+        return vf.createIRI(ResourceUtils.decode(value));
     }
 }

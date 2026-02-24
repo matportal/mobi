@@ -25,7 +25,6 @@ package com.mobi.catalog.rest;
 
 import static com.mobi.ontologies.rdfs.Resource.type_IRI;
 import static com.mobi.rest.util.RestUtils.checkStringParam;
-import static com.mobi.rest.util.RestUtils.createIRI;
 import static com.mobi.rest.util.RestUtils.createPaginatedResponse;
 import static com.mobi.rest.util.RestUtils.getActiveUser;
 import static com.mobi.rest.util.RestUtils.getObjectFromJsonld;
@@ -59,6 +58,7 @@ import com.mobi.exception.MobiException;
 import com.mobi.jaas.api.engines.EngineManager;
 import com.mobi.jaas.api.ontologies.usermanagement.User;
 import com.mobi.ontologies.dcterms._Thing;
+import com.mobi.persistence.utils.ResourceUtils;
 import com.mobi.rest.security.annotations.ActionId;
 import com.mobi.rest.security.annotations.ResourceId;
 import com.mobi.rest.security.annotations.Value;
@@ -219,7 +219,7 @@ public class MergeRequestRest {
         User activeUser = getActiveUser(servletRequest, engineManager);
         MergeRequestFilterParams.Builder builder = new MergeRequestFilterParams.Builder().setRequestingUser(activeUser);
         if (!StringUtils.isEmpty(sort)) {
-            builder.setSortBy(createIRI(sort, vf));
+            builder.setSortBy(createIri(sort, vf));
         }
         if (!StringUtils.isEmpty(searchText)) {
             builder.setSearchText(searchText);
@@ -326,8 +326,8 @@ public class MergeRequestRest {
         checkStringParam(sourceBranchId, "Merge Request source branch is required");
         checkStringParam(targetBranchId, "Merge Request target branch is required");
         User activeUser = getActiveUser(servletRequest, engineManager);
-        MergeRequestConfig.Builder builder = new MergeRequestConfig.Builder(title, createIRI(recordId, vf),
-                createIRI(sourceBranchId, vf), createIRI(targetBranchId, vf), activeUser, removeSource);
+        MergeRequestConfig.Builder builder = new MergeRequestConfig.Builder(title, createIri(recordId, vf),
+                createIri(sourceBranchId, vf), createIri(targetBranchId, vf), activeUser, removeSource);
         if (StringUtils.isNotEmpty(StringUtils.stripToEmpty(description))) {
             builder.description(description);
         }
@@ -568,7 +568,7 @@ public class MergeRequestRest {
     public Response getMergeRequest(
             @Parameter(description = "String representing the MergeRequest", required = true)
             @PathParam("requestId") String requestId) {
-        Resource requestIdResource = createIRI(requestId, vf);
+        Resource requestIdResource = createIri(requestId, vf);
         try {
             MergeRequest request = manager.getMergeRequest(requestIdResource).orElseThrow(() ->
                     ErrorUtils.sendError(MERGE_REQUEST + requestId + COULD_NOT_BE_FOUND,
@@ -610,7 +610,7 @@ public class MergeRequestRest {
             @Parameter(description = "String representing the JSONLD representation of the updated MergeRequest",
                     required = true)
                     String newMergeRequest) {
-        Resource requestIdResource = createIRI(requestId, vf);
+        Resource requestIdResource = createIri(requestId, vf);
         User activeUser = getActiveUser(servletRequest, engineManager);
         try {
             if (checkMergeRequestManagePermissions(requestIdResource, activeUser)) {
@@ -660,10 +660,10 @@ public class MergeRequestRest {
             @Context HttpServletRequest servletRequest,
             @Parameter(description = "String representing the MergeRequest ID", required = true)
             @PathParam("requestId") String requestId){
-        Resource requestIdResource = createIRI(requestId, vf);
+        Resource requestIdResource = createIri(requestId, vf);
         try (RepositoryConnection conn = configProvider.getRepository().getConnection()) {
             String status;
-            List<String> types = conn.getStatements(requestIdResource, vf.createIRI(type_IRI), null).stream()
+            List<String> types = conn.getStatements(requestIdResource, createIri(type_IRI), null).stream()
                     .map(statement -> statement.getObject().stringValue())
                     .collect(Collectors.toUnmodifiableList());
 
@@ -723,7 +723,7 @@ public class MergeRequestRest {
                     allowableValues = {"accept", "close", "open"},
                     required = true))
             @QueryParam("action") @DefaultValue("") String action ) {
-        Resource requestIdResource = createIRI(requestId, vf);
+        Resource requestIdResource = createIri(requestId, vf);
         User activeUser = getActiveUser(servletRequest, engineManager);
         try {
             if (checkMergeRequestManagePermissions(requestIdResource, activeUser)) {
@@ -773,7 +773,7 @@ public class MergeRequestRest {
             @Context HttpServletRequest servletRequest,
             @Parameter(description = "String representing the MergeRequest ID to delete", required = true)
             @PathParam("requestId") String requestId) {
-        Resource requestIdResource = createIRI(requestId, vf);
+        Resource requestIdResource = createIri(requestId, vf);
         User activeUser = getActiveUser(servletRequest, engineManager);
         try {
             if (checkMergeRequestManagePermissions(requestIdResource, activeUser)) {
@@ -804,7 +804,7 @@ public class MergeRequestRest {
                         Response.Status.NOT_FOUND));
         boolean accessDenied = true;
 
-        Optional<org.eclipse.rdf4j.model.Value> creator = mergeRequest.getProperty(vf.createIRI(_Thing.creator_IRI));
+        Optional<org.eclipse.rdf4j.model.Value> creator = mergeRequest.getProperty(createIri(_Thing.creator_IRI));
         if (creator.isPresent() && creator.get().stringValue().equals(activeUser.getResource().stringValue())) {
             accessDenied = false;
         }
@@ -813,10 +813,10 @@ public class MergeRequestRest {
         if (accessDenied && onRecord.isPresent()) {
             Request request = pdp.createRequest(asList((IRI) activeUser.getResource()), new HashMap<>(),
                     asList((IRI)onRecord.get()), new HashMap<>(),
-                    asList(vf.createIRI(Update.TYPE)), new HashMap<>());
+                    asList(createIri(Update.TYPE)), new HashMap<>());
             log.debug(request.toString());
             com.mobi.security.policy.api.Response response = pdp.evaluate(request,
-                    vf.createIRI(POLICY_PERMIT_OVERRIDES));
+                    createIri(POLICY_PERMIT_OVERRIDES));
             log.debug(response.toString());
 
             if (response.getDecision().equals(Decision.PERMIT)) {
@@ -853,7 +853,7 @@ public class MergeRequestRest {
     public Response getComments(
             @Parameter(description = "String representing the MergeRequest ID", required = true)
             @PathParam("requestId") String requestId) {
-        Resource requestIdResource = createIRI(requestId, vf);
+        Resource requestIdResource = createIri(requestId, vf);
         try {
             ArrayNode result = mapper.createArrayNode();
             manager.getComments(requestIdResource)
@@ -903,10 +903,10 @@ public class MergeRequestRest {
             @Parameter(description = "String representing the Comment ID", required = true)
             @PathParam("commentId") String commentId) {
         try {
-            manager.getMergeRequest(createIRI(requestId, vf)).orElseThrow(() ->
+            manager.getMergeRequest(createIri(requestId, vf)).orElseThrow(() ->
                     ErrorUtils.sendError(MERGE_REQUEST + requestId + COULD_NOT_BE_FOUND,
                             Response.Status.NOT_FOUND));
-            Comment comment = manager.getComment(createIRI(commentId, vf)).orElseThrow(() ->
+            Comment comment = manager.getComment(createIri(commentId, vf)).orElseThrow(() ->
                     ErrorUtils.sendError(COMMENT + commentId + COULD_NOT_BE_FOUND,
                             Response.Status.NOT_FOUND));
             String json = groupedModelToString(comment.getModel(), getRDFFormat("jsonld"));
@@ -966,10 +966,10 @@ public class MergeRequestRest {
         try {
             Comment comment = null;
             if (StringUtils.isEmpty(commentId)) {
-                comment = manager.createComment(createIRI(requestId, vf), activeUser, commentStr);
+                comment = manager.createComment(createIri(requestId, vf), activeUser, commentStr);
             } else {
-                comment = manager.createComment(createIRI(requestId, vf), activeUser, commentStr,
-                        createIRI(commentId, vf));
+                comment = manager.createComment(createIri(requestId, vf), activeUser, commentStr,
+                        createIri(commentId, vf));
             }
             return Response.status(201).entity(comment.getResource().stringValue()).build();
         } catch (IllegalArgumentException ex) {
@@ -1012,23 +1012,23 @@ public class MergeRequestRest {
             @PathParam("commentId") String commentId,
             @Parameter(description = "String representing the new description of the updated Comment", required = true)
                     String newCommentStr) {
-        manager.getMergeRequest(createIRI(requestId, vf)).orElseThrow(() ->
+        manager.getMergeRequest(createIri(requestId, vf)).orElseThrow(() ->
                 ErrorUtils.sendError(MERGE_REQUEST + requestId + COULD_NOT_BE_FOUND,
                         Response.Status.NOT_FOUND));
 
-        Resource commentIdResource = createIRI(commentId, vf);
+        Resource commentIdResource = createIri(commentId, vf);
         Comment comment = manager.getComment(commentIdResource).orElseThrow(() ->
                 ErrorUtils.sendError(COMMENT + commentId + COULD_NOT_BE_FOUND,
                         Response.Status.BAD_REQUEST));
         checkStringParam(newCommentStr, "Comment string is required");
 
         User activeUser = getActiveUser(servletRequest, engineManager);
-        Optional<org.eclipse.rdf4j.model.Value> creator = comment.getProperty(vf.createIRI(_Thing.creator_IRI));
+        Optional<org.eclipse.rdf4j.model.Value> creator = comment.getProperty(createIri(_Thing.creator_IRI));
         if (creator.isPresent() && !(creator.get().stringValue().equals(activeUser.getResource().stringValue()))) {
             return Response.status(Response.Status.UNAUTHORIZED).build();
         }
 
-        comment.setProperty(vf.createLiteral(newCommentStr), vf.createIRI(_Thing.description_IRI));
+        comment.setProperty(vf.createLiteral(newCommentStr), createIri(_Thing.description_IRI));
         try {
             manager.updateComment(commentIdResource, comment);
             return Response.ok().build();
@@ -1071,14 +1071,14 @@ public class MergeRequestRest {
             @Parameter(description = "String representing the Comment ID to delete", required = true)
             @PathParam("commentId") String commentId) {
         try {
-            Resource commentIRI = createIRI(commentId, vf);
-            manager.getMergeRequest(createIRI(requestId, vf)).orElseThrow(() ->
+            Resource commentIRI = createIri(commentId, vf);
+            manager.getMergeRequest(createIri(requestId, vf)).orElseThrow(() ->
                     ErrorUtils.sendError(COMMENT + requestId + COULD_NOT_BE_FOUND,
                             Response.Status.NOT_FOUND));
             Comment comment = manager.getComment(commentIRI).orElseThrow(() ->
                     ErrorUtils.sendError(COMMENT + commentId + COULD_NOT_BE_FOUND,
                             Response.Status.NOT_FOUND));
-            Optional<org.eclipse.rdf4j.model.Value> commentUser = comment.getProperty(vf.createIRI(_Thing.creator_IRI));
+            Optional<org.eclipse.rdf4j.model.Value> commentUser = comment.getProperty(createIri(_Thing.creator_IRI));
             User user = getActiveUser(servletRequest, engineManager);
             if (commentUser.isPresent() && commentUser.get().stringValue().equals(user.getResource().stringValue())) {
                 manager.deleteComment(commentIRI);
@@ -1139,6 +1139,18 @@ public class MergeRequestRest {
             recordArrayNode.add(recordObject);
         }
         return recordArrayNode;
+    }
+
+    private IRI createIri(String value, ValueFactory valueFactory) {
+        return RestUtils.createIRI(ResourceUtils.decode(value), valueFactory);
+    }
+
+    private IRI createIri(String value) {
+        return createIri(value, vf);
+    }
+
+    private IRI createIri(IRI value) {
+        return value;
     }
 
 }
