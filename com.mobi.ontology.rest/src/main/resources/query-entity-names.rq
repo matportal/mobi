@@ -17,39 +17,42 @@ WHERE {
     WHERE {
       %ENTITIES%
       {
+        VALUES (?property ?baseOrder) { (rdfs:label 2) (dcterms:title 4) (dc:title 6) (skos:prefLabel 8) (skos:altLabel 10) (skos-xl:literalForm 12) (sh:name 18)}
+        ?entity ?property ?name .
+        FILTER(!isBLANK(?entity))
+        FILTER(LANGMATCHES(LANG(?name), "EN"))
+        BIND(?baseOrder - 1 as ?propertyOrder)
+      }
+      UNION
+      {
         VALUES (?property ?propertyOrder) { (rdfs:label 2) (dcterms:title 4) (dc:title 6) (skos:prefLabel 8) (skos:altLabel 10) (skos-xl:literalForm 12) (sh:name 18)}
         ?entity ?property ?name .
-        FILTER(isIRI(?entity))
-        OPTIONAL {
-          ?entity ?property ?name .
-          FILTER(LANGMATCHES(LANG(?name), "EN"))
-          BIND(?propertyOrder - 1 as ?propertyOrder)
-        }
+        FILTER(!isBLANK(?entity))
       }
       UNION
       {
         ?entity (skos-xl:prefLabel/skos-xl:literalForm) ?name .
-        FILTER(isIRI(?entity))
+        FILTER(!isBLANK(?entity))
         FILTER(LANGMATCHES(LANG(?name), "EN"))
         BIND(13 as ?propertyOrder)
       }
       UNION
       {
         ?entity (skos-xl:prefLabel/skos-xl:literalForm) ?name .
-        FILTER(isIRI(?entity))
+        FILTER(!isBLANK(?entity))
         BIND(14 as ?propertyOrder)
       }
       UNION
       {
         ?entity (skos-xl:altLabel/skos-xl:literalForm) ?name .
-        FILTER(isIRI(?entity))
+        FILTER(!isBLANK(?entity))
         FILTER(LANGMATCHES(LANG(?name), "EN"))
         BIND(14 as ?propertyOrder)
       }
       UNION
       {
         ?entity (skos-xl:altLabel/skos-xl:literalForm) ?name .
-        FILTER(isIRI(?entity))
+        FILTER(!isBLANK(?entity))
         BIND(15 as ?propertyOrder)
       }
     } ORDER BY ?propertyOrder

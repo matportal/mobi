@@ -919,8 +919,10 @@ public class OntologyRestImplTest extends MobiRestTestCXF {
                 new TypeReference<Map<String, EntityNames>>(){});
         assertEquals(actualValues.keySet(), expectedValues.keySet());
         Map<String, EntityNames> finalExpectedValues = expectedValues;
-        actualValues.forEach((s, entityNames1) ->
-                assertEquals(entityNames1.getNames(), finalExpectedValues.get(s).getNames()));
+        actualValues.forEach((s, entityNames1) -> {
+                assertEquals(finalExpectedValues.get(s).getNames(), entityNames1.getNames());
+                assertEquals(finalExpectedValues.get(s).label, entityNames1.label);
+        });
     }
 
     @Test
