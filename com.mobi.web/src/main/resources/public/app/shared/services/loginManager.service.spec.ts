@@ -378,6 +378,7 @@ describe('Login Manager service', function() {
     describe('validateSession', () => {
         it('should return false and redirect if no token is present', (done) => {
             spyOn(service, 'getCookie').and.returnValue(null);
+            spyOn(service, 'isAuthenticated').and.returnValue(of(false));
             spyOn(service, 'clearServiceStates');
     
             service.validateSession(true).subscribe((result) => {
@@ -390,6 +391,7 @@ describe('Login Manager service', function() {
         });
         it('should return false and redirect if no token is present and should not show toast', (done) => {
             spyOn(service, 'getCookie').and.returnValue(null);
+            spyOn(service, 'isAuthenticated').and.returnValue(of(false));
             spyOn(service, 'clearServiceStates');
     
             service.validateSession(false).subscribe((result) => {
@@ -397,6 +399,19 @@ describe('Login Manager service', function() {
                 expect(toastServiceStub.createErrorToast).not.toHaveBeenCalledWith(service.NO_TOKEN_MESSAGE);
                 expect(service.clearServiceStates).toHaveBeenCalled();
                 expect(router.navigate).toHaveBeenCalledWith(['/login']);
+                done();
+            });
+        });
+        it('should return true if no token is present and the server session is authenticated', (done) => {
+            spyOn(service, 'getCookie').and.returnValue(null);
+            spyOn(service, 'isAuthenticated').and.returnValue(of(true));
+            spyOn(service, 'clearServiceStates');
+
+            service.validateSession(true).subscribe((result) => {
+                expect(result).toBeTrue();
+                expect(toastServiceStub.createErrorToast).not.toHaveBeenCalled();
+                expect(service.clearServiceStates).not.toHaveBeenCalled();
+                expect(router.navigate).not.toHaveBeenCalled();
                 done();
             });
         });

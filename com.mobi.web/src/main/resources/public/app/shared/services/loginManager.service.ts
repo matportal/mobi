@@ -329,10 +329,12 @@ export class LoginManagerService {
   }
 
   private verifyAuth(validationStatus: {tokenExists: boolean; isExpired: boolean}): Observable<{valid: boolean, tokenExists: boolean, isExpired: boolean}>{
-    // If the token exists and is not expired, check the session
+    // A server-backed session can be valid even when the browser has not yet
+    // received a mobi_web_token cookie, so verify the active session unless the
+    // local token is present and expired.
     const tokenExists = validationStatus.tokenExists;
     const isExpired = validationStatus.isExpired;
-    if (!validationStatus.tokenExists || validationStatus.isExpired) {
+    if (validationStatus.isExpired) {
       return of({ 
           valid: false, 
           tokenExists,

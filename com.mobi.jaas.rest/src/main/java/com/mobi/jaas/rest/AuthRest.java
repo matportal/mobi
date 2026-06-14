@@ -68,6 +68,7 @@ import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
+import javax.ws.rs.core.SecurityContext;
 
 @Component(service = AuthRest.class, immediate = true)
 @JaxrsResource
@@ -114,13 +115,20 @@ public class AuthRest {
             }
     )
     public Response getCurrentUser(
+            @Context SecurityContext securityContext,
             @Context HttpServletRequest servletRequest) {
         Optional<String> optUsername = RestUtils.optActiveUsername(servletRequest);
+        if (!optUsername.isPresent()) {
+            optUsername = Optional.ofNullable(securityContext)
+                    .map(SecurityContext::getUserPrincipal)
+                    .map(Principal::getName)
+                    .filter(StringUtils::isNotBlank);
+        }
         if (optUsername.isPresent()) {
-            log.debug("Found username in request headers");
+            log.debug("Found username in active request context");
             return Response.ok(optUsername.get()).build();
         } else {
-            log.debug("No username found in request headers. Generating unauthenticated token.");
+            log.debug("No username found in active request context. Generating unauthenticated token.");
             SignedJWT signedToken = tokenManager.generateUnauthToken();
             return createResponse(signedToken, null, false);
         }
