@@ -4,7 +4,6 @@ PREFIX owl: <http://www.w3.org/2002/07/owl#>
 SELECT
     (COUNT(DISTINCT ?entityIri) AS ?count)
 WHERE {
-  # USAGE:  BIND ("title" as ?search_text)
   GRAPH ?record {
     ?record a catalog:VersionedRDFRecord .
     ?record a ?recordTypeVal;
@@ -17,10 +16,8 @@ WHERE {
       catalog:headGraph ?headGraph .
   }
   GRAPH ?headGraph {
-    ?entityIri ?p ?o .
-    FILTER(
-      !isBlank(?entityIri) &&
-      !BOUND(?search_text) || isLiteral(?o) && CONTAINS(LCASE(?o), LCASE(?search_text))
-    )
+    ?entityIri ?searchPredicate ?searchValue .
+    FILTER(!isBlank(?entityIri))
+    %SEARCH_FILTER%
   }
 }

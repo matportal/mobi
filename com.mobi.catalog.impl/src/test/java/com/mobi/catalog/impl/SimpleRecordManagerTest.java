@@ -639,6 +639,32 @@ public class SimpleRecordManagerTest extends OrmEnabledTestCase {
     }
 
     @Test
+    public void testReplaceSearchFilterWhenSearchTextProvided() {
+        PaginatedSearchParams searchParams = new PaginatedSearchParams.Builder()
+                .searchText("Unversioned").build();
+        String baseQuery = "SELECT * WHERE { %SEARCH_FILTER% }";
+        String filter = "FILTER(isLiteral(?searchValue)"
+                + " && CONTAINS(LCASE(STR(?searchValue)), LCASE(STR(?search_text))))";
+
+        String actual = manager.replaceSearchFilter(searchParams, baseQuery, filter);
+
+        assertEquals("SELECT * WHERE { " + filter + " }", actual);
+    }
+
+    @Test
+    public void testReplaceSearchFilterWhenSearchTextBlank() {
+        PaginatedSearchParams searchParams = new PaginatedSearchParams.Builder()
+                .searchText("   ").build();
+
+        String baseQuery = "SELECT * WHERE { %SEARCH_FILTER% }";
+        String actual = manager.replaceSearchFilter(searchParams, baseQuery,
+                "FILTER(isLiteral(?searchValue)"
+                        + " && CONTAINS(LCASE(STR(?searchValue)), LCASE(STR(?search_text))))");
+
+        assertEquals("SELECT * WHERE {  }", actual);
+    }
+
+    @Test
     public void testEscapeKeywordComma() throws Exception {
         assertEquals("\\'", manager.escapeKeyword("'"));
         assertEquals("\\\\", manager.escapeKeyword("\\"));

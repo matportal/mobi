@@ -111,6 +111,14 @@ public class SimpleRecordManager implements RecordManager {
     private static final String RECORD_COUNT_BINDING = "record_count";
     private static final String KEYWORD_COUNT_BINDING = "keyword_count";
     private static final String SEARCH_BINDING = "search_text";
+    private static final String SEARCH_FILTER_PLACEHOLDER = "%SEARCH_FILTER%";
+    private static final String RECORD_SEARCH_FILTER = "?record ?searchPredicate ?searchValue .\n"
+            + "    FILTER(isLiteral(?searchValue)"
+            + " && CONTAINS(LCASE(STR(?searchValue)), LCASE(STR(?search_text))))";
+    private static final String KEYWORD_SEARCH_FILTER = "FILTER(CONTAINS(LCASE(STR(?keyword)),"
+            + " LCASE(STR(?search_text))))";
+    private static final String ENTITY_SEARCH_FILTER = "FILTER(isLiteral(?searchValue)"
+            + " && CONTAINS(LCASE(STR(?searchValue)), LCASE(STR(?search_text))))";
 
     private static final String RECORD_TYPE_BINDING = "recordType";
     private static final String ENTITY_IRI_BINDING = "entityIri";
@@ -245,19 +253,19 @@ public class SimpleRecordManager implements RecordManager {
         if (viewableRecords.isEmpty()) {
             return SearchResults.emptyResults();
         }
-        Optional<String> searchTextParam = searchParams.getSearchText();
         String viewableRecordsConcat  = viewableRecords.stream()
                 .map(record -> String.format("<%s>", record))
                 .collect(Collectors.joining(" "));
         // Count Query
-        String countQueryStr = GET_ENTITIES_COUNT_QUERY
-                .replace("%RECORDS%", viewableRecordsConcat);
+        String countQueryStr = replaceSearchFilter(searchParams,
+                GET_ENTITIES_COUNT_QUERY
+                .replace("%RECORDS%", viewableRecordsConcat),
+                ENTITY_SEARCH_FILTER);
         if (log.isTraceEnabled()) {
             log.trace("Count Query: " + countQueryStr);
         }
         TupleQuery countQuery = conn.prepareTupleQuery(countQueryStr);
-        searchTextParam.ifPresent((searchText) -> countQuery.setBinding(SEARCH_BINDING,
-                conn.getValueFactory().createLiteral(searchText)));
+        applySearchBinding(searchParams, countQuery);
         int totalCount = 0;
         try(TupleQueryResult countResults = countQuery.evaluate()) {
             if (countResults.getBindingNames().contains("count") && countResults.hasNext()) {
@@ -277,10 +285,12 @@ public class SimpleRecordManager implements RecordManager {
             throw new IllegalArgumentException(OFFSET_EXCEEDS);
         }
         // Get Entities query
-        String entitiesQueryStr = GET_ENTITIES_QUERY
+        String entitiesQueryStr = replaceSearchFilter(searchParams,
+                GET_ENTITIES_QUERY
                 .replace("%RECORDS%", viewableRecordsConcat)
                 .replace("#%LIMIT%", String.format("LIMIT %d", limit))
-                .replace("#%OFFSET%", String.format("OFFSET %d", offset));
+                .replace("#%OFFSET%", String.format("OFFSET %d", offset)),
+                ENTITY_SEARCH_FILTER);
 
         StringBuilder querySuffix = new StringBuilder("\nORDER BY ");
         Optional<SortKey> optionalSortBy = searchParams.getSortBy();
@@ -313,8 +323,7 @@ public class SimpleRecordManager implements RecordManager {
         }
         TupleQuery query = conn.prepareTupleQuery(entitiesQueryStr);
 
-        searchTextParam.ifPresent((searchText) -> query.setBinding(SEARCH_BINDING,
-                conn.getValueFactory().createLiteral(searchText)));
+        applySearchBinding(searchParams, query);
 
         List<EntityMetadata> entities = new ArrayList<>();
         // Execute the query
@@ -384,14 +393,14 @@ public class SimpleRecordManager implements RecordManager {
     @Override
     public PaginatedSearchResults<Record> findRecord(Resource catalogId, PaginatedSearchParams searchParams,
                                                      RepositoryConnection conn) {
-        Optional<String> searchTextParam = searchParams.getSearchText();
-
-        String queryStr = replaceRecordsFilter(new ArrayList<>(), COUNT_RECORDS_QUERY);
+        String queryStr = replaceSearchFilter(searchParams,
+                replaceRecordsFilter(new ArrayList<>(), COUNT_RECORDS_QUERY),
+                RECORD_SEARCH_FILTER);
         // Get Total Count
         TupleQuery countQuery = conn.prepareTupleQuery(replaceRecordTypeFilter(searchParams,
                 replaceCreatorFilter(searchParams, replaceKeywordFilter(searchParams, queryStr))));
         countQuery.setBinding(CATALOG_BINDING, catalogId);
-        searchTextParam.ifPresent(s -> countQuery.setBinding(SEARCH_BINDING, vf.createLiteral(s)));
+        applySearchBinding(searchParams, countQuery);
 
         TupleQueryResult countResults = countQuery.evaluate();
 
@@ -409,8 +418,10 @@ public class SimpleRecordManager implements RecordManager {
         log.debug("Record count: " + totalCount);
 
         Function<String, String> queryFunc = querySuffix -> {
-            String queryString = replaceRecordsFilter(new ArrayList<>(), replaceCreatorFilter(searchParams,
-                    replaceKeywordFilter(searchParams, FIND_RECORDS_QUERY + querySuffix)));
+            String queryString = replaceSearchFilter(searchParams,
+                    replaceRecordsFilter(new ArrayList<>(), replaceCreatorFilter(searchParams,
+                            replaceKeywordFilter(searchParams, FIND_RECORDS_QUERY + querySuffix))),
+                    RECORD_SEARCH_FILTER);
             log.debug(QUERY_STRING, queryString);
             return queryString;
         };
@@ -430,8 +441,10 @@ public class SimpleRecordManager implements RecordManager {
         }
 
         Function<String, String> queryFunc = querySuffix -> {
-            String queryString = replaceRecordTypeFilter(searchParams,
-                    replaceKeywordFilter(searchParams, FIND_RECORDS_QUERY + querySuffix));
+            String queryString = replaceSearchFilter(searchParams,
+                    replaceRecordTypeFilter(searchParams,
+                            replaceKeywordFilter(searchParams, FIND_RECORDS_QUERY + querySuffix)),
+                    RECORD_SEARCH_FILTER);
             queryString = replaceCreatorFilter(searchParams, queryString);
             queryString = replaceRecordsFilter(viewableRecords, queryString);
             log.debug(QUERY_STRING, queryString);
@@ -458,13 +471,15 @@ public class SimpleRecordManager implements RecordManager {
         if (offset > totalCount) {
             throw new IllegalArgumentException(OFFSET_EXCEEDS);
         }
-        String queryString = GET_KEYWORD_QUERY + "\nLIMIT " + limit + "\nOFFSET " + offset;
+        String queryString = replaceSearchFilter(searchParams,
+                GET_KEYWORD_QUERY + "\nLIMIT " + limit + "\nOFFSET " + offset,
+                KEYWORD_SEARCH_FILTER);
 
         log.debug(QUERY_STRING, queryString);
 
         TupleQuery query = conn.prepareTupleQuery(queryString);
         query.setBinding(CATALOG_BINDING, catalogId);
-        searchParams.getSearchText().ifPresent(s -> query.setBinding(SEARCH_BINDING, vf.createLiteral(s)));
+        applySearchBinding(searchParams, query);
 
         log.debug(QUERY_PLAN, query);
 
@@ -561,15 +576,16 @@ public class SimpleRecordManager implements RecordManager {
 
     protected List<String> getViewableRecords(Resource catalogId, PaginatedSearchParams searchParams, User user,
                                            RepositoryConnection conn) {
-        String queryString = replaceRecordTypeFilter(searchParams, replaceRecordsFilter(new ArrayList<>(),
-                replaceCreatorFilter(searchParams, replaceKeywordFilter(searchParams, FIND_RECORDS_QUERY))));
+        String queryString = replaceSearchFilter(searchParams,
+                replaceRecordTypeFilter(searchParams, replaceRecordsFilter(new ArrayList<>(),
+                        replaceCreatorFilter(searchParams, replaceKeywordFilter(searchParams, FIND_RECORDS_QUERY)))),
+                RECORD_SEARCH_FILTER);
 
         log.debug(QUERY_STRING, queryString);
 
         TupleQuery query = conn.prepareTupleQuery(queryString);
         query.setBinding(CATALOG_BINDING, catalogId);
-        searchParams.getSearchText().ifPresent(searchText ->
-                query.setBinding(SEARCH_BINDING, vf.createLiteral(searchText)));
+        applySearchBinding(searchParams, query);
 
         log.debug(QUERY_PLAN, query);
 
@@ -603,6 +619,24 @@ public class SimpleRecordManager implements RecordManager {
         Set<String> viewableRecords = pdp.filter(request,
                 vf.createIRI(POLICY_PERMIT_OVERRIDES));
         return new ArrayList<>(viewableRecords);
+    }
+
+    protected boolean hasSearchText(PaginatedSearchParams searchParams) {
+        return searchParams.getSearchText()
+                .filter(StringUtils::isNotBlank)
+                .isPresent();
+    }
+
+    protected String replaceSearchFilter(PaginatedSearchParams searchParams, String queryString, String filter) {
+        if (hasSearchText(searchParams)) {
+            return queryString.replace(SEARCH_FILTER_PLACEHOLDER, filter);
+        }
+        return queryString.replace(SEARCH_FILTER_PLACEHOLDER, "");
+    }
+
+    private void applySearchBinding(PaginatedSearchParams searchParams, TupleQuery query) {
+        searchParams.getSearchText().filter(StringUtils::isNotBlank)
+                .ifPresent(searchText -> query.setBinding(SEARCH_BINDING, vf.createLiteral(searchText)));
     }
 
     protected String escapeKeyword(String keyword) {
@@ -719,9 +753,7 @@ public class SimpleRecordManager implements RecordManager {
         TupleQuery query = conn.prepareTupleQuery(replaceRecordTypeFilter(searchParams, queryString));
         query.setBinding(CATALOG_BINDING, catalogId);
 
-        Optional<String> searchTextParam = searchParams.getSearchText();
-
-        searchTextParam.ifPresent(searchText -> query.setBinding(SEARCH_BINDING, vf.createLiteral(searchText)));
+        applySearchBinding(searchParams, query);
 
         log.debug("Query Plan:\n" + query);
 
@@ -782,10 +814,10 @@ public class SimpleRecordManager implements RecordManager {
     }
 
     private int getKeywordCount(RepositoryConnection conn, Resource catalogId, PaginatedSearchParams searchParams) {
-        TupleQuery countQuery = conn.prepareTupleQuery(GET_KEYWORD_COUNT_QUERY);
+        String countQueryString = replaceSearchFilter(searchParams, GET_KEYWORD_COUNT_QUERY, KEYWORD_SEARCH_FILTER);
+        TupleQuery countQuery = conn.prepareTupleQuery(countQueryString);
         countQuery.setBinding(CATALOG_BINDING, catalogId);
-        searchParams.getSearchText().ifPresent(searchText ->
-                countQuery.setBinding(SEARCH_BINDING, vf.createLiteral(searchText)));
+        applySearchBinding(searchParams, countQuery);
 
         TupleQueryResult countResults = countQuery.evaluate();
         int totalCount = 0;

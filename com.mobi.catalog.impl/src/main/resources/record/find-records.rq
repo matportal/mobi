@@ -7,12 +7,11 @@ WHERE {
         mcat:catalog ?catalog ;
         dc:title ?title ;
         dc:issued ?issued ;
-        dc:modified ?modified ;
-        ?p ?o .
+        dc:modified ?modified .
 
     %RECORDS_FILTER%
     %KEYWORDS_FILTER%
     %CREATORS_FILTER%
     FILTER(?type IN (%RECORD_TYPE_FILTER%))
-    FILTER IF(bound(?search_text), CONTAINS(lcase(?o), lcase(?search_text)), true)
+    %SEARCH_FILTER%
 }

@@ -22,7 +22,6 @@ SELECT DISTINCT
   (SAMPLE(?finalDescription) as ?description)
   (GROUP_CONCAT(DISTINCT ?po; SEPARATOR="��") AS ?predObjects)
 WHERE {
-  # USAGE:  BIND ("title" as ?search_text)
   GRAPH ?record {
     ?record a catalog:VersionedRDFRecord ;
        catalog:masterBranch ?masterBranch ;
@@ -48,13 +47,11 @@ WHERE {
   }
   GRAPH ?headGraph {
     # SEARCH all Objects for search_text
-    ?entityIri ?p ?o .
-    FILTER(
-      !isBlank(?entityIri) &&
-      !BOUND(?search_text) || isLiteral(?o) && CONTAINS(LCASE(?o), LCASE(?search_text))
-    )
+    ?entityIri ?searchPredicate ?searchValue .
+    FILTER(!isBlank(?entityIri))
+    %SEARCH_FILTER%
     # CONCAT Predicate and Object
-    BIND(CONCAT(STR(?p), "�",STR(?o)) as ?po)
+    BIND(CONCAT(STR(?searchPredicate), "�",STR(?searchValue)) as ?po)
     # Get Entity Types
     OPTIONAL {
       ?entityIri a ?entityTypeVal.

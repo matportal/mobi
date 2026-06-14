@@ -5,12 +5,11 @@ SELECT
     (COUNT(distinct ?record) as ?record_count)
 WHERE {
     ?record a ?type ;
-        mcat:catalog ?catalog ;
-        ?p ?o .
+        mcat:catalog ?catalog .
 
     %RECORDS_FILTER%
     %KEYWORDS_FILTER%
     %CREATORS_FILTER%
     FILTER(?type IN (%RECORD_TYPE_FILTER%))
-    FILTER IF(bound(?search_text), CONTAINS(lcase(?o), lcase(?search_text)), true)
+    %SEARCH_FILTER%
 }
