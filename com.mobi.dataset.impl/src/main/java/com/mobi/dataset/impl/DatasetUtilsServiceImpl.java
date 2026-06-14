@@ -37,11 +37,16 @@ import org.eclipse.rdf4j.model.Statement;
 import org.eclipse.rdf4j.model.Value;
 import org.eclipse.rdf4j.model.ValueFactory;
 import org.eclipse.rdf4j.model.impl.ValidatingValueFactory;
+import org.eclipse.rdf4j.query.TupleQuery;
+import org.eclipse.rdf4j.query.TupleQueryResult;
+import org.eclipse.rdf4j.query.Update;
 import org.eclipse.rdf4j.repository.RepositoryConnection;
 import org.eclipse.rdf4j.repository.RepositoryResult;
 import org.osgi.service.component.annotations.Component;
 import org.osgi.service.component.annotations.Reference;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.Predicate;
 
 @Component(immediate = true)
@@ -93,7 +98,7 @@ public class DatasetUtilsServiceImpl implements DatasetUtilsService {
         OsgiRepository dsRepo = getDatasetRepo(repositoryId);
         try (RepositoryConnection conn = dsRepo.getConnection()) {
             deleteGraphs(conn, dataset);
-            conn.remove(dataset, null, null);
+            removeDatasetMetadata(conn, dataset);
         }
     }
 
@@ -102,7 +107,7 @@ public class DatasetUtilsServiceImpl implements DatasetUtilsService {
         OsgiRepository dsRepo = getDatasetRepo(repositoryId);
         try (RepositoryConnection conn = dsRepo.getConnection()) {
             safeDeleteGraphs(conn, dataset);
-            conn.remove(dataset, null, null);
+            removeDatasetMetadata(conn, dataset);
         }
     }
 
@@ -141,14 +146,14 @@ public class DatasetUtilsServiceImpl implements DatasetUtilsService {
         IRI ngPred = vf.createIRI(Dataset.namedGraph_IRI);
         IRI dngPred = vf.createIRI(Dataset.defaultNamedGraph_IRI);
         IRI sdngPred = vf.createIRI(Dataset.systemDefaultNamedGraph_IRI);
-        conn.getStatements(dataset, ngPred, null).forEach(stmt -> clearGraph(conn, stmt.getObject()));
-        conn.getStatements(dataset, dngPred, null).forEach(stmt -> clearGraph(conn, stmt.getObject()));
-        conn.getStatements(dataset, sdngPred, null).forEach(stmt -> clearGraph(conn, stmt.getObject()));
+        getLinkedGraphs(conn, dataset, ngPred).forEach(graph -> clearGraph(conn, graph));
+        getLinkedGraphs(conn, dataset, dngPred).forEach(graph -> clearGraph(conn, graph));
+        getLinkedGraphs(conn, dataset, sdngPred).forEach(graph -> clearGraph(conn, graph));
     }
 
     private void clearGraph(RepositoryConnection conn, Value graph) {
         if (graph instanceof IRI) {
-            conn.clear(vf.createIRI(graph.stringValue()));
+            clearIriGraph(conn, (IRI) graph);
         } else if (graph instanceof BNode) {
             conn.clear(vf.createBNode(graph.stringValue()));
         }
@@ -158,20 +163,17 @@ public class DatasetUtilsServiceImpl implements DatasetUtilsService {
         IRI ngPred = vf.createIRI(Dataset.namedGraph_IRI);
         IRI dngPred = vf.createIRI(Dataset.defaultNamedGraph_IRI);
         IRI sdngPred = vf.createIRI(Dataset.systemDefaultNamedGraph_IRI);
-        conn.getStatements(dataset, ngPred, null).forEach(stmt -> {
-            Value graph = stmt.getObject();
+        getLinkedGraphs(conn, dataset, ngPred).forEach(graph -> {
             if (safeToDelete(conn, dataset, graph)) {
                 clearGraph(conn, graph);
             }
         });
-        conn.getStatements(dataset, dngPred, null).forEach(stmt -> {
-            Value graph = stmt.getObject();
+        getLinkedGraphs(conn, dataset, dngPred).forEach(graph -> {
             if (safeToDelete(conn, dataset, graph)) {
                 clearGraph(conn, graph);
             }
         });
-        conn.getStatements(dataset, sdngPred, null).forEach(stmt -> {
-            Value graph = stmt.getObject();
+        getLinkedGraphs(conn, dataset, sdngPred).forEach(graph -> {
             if (safeToDelete(conn, dataset, graph)) {
                 clearGraph(conn, graph);
             }
@@ -182,31 +184,60 @@ public class DatasetUtilsServiceImpl implements DatasetUtilsService {
         IRI ngPred = vf.createIRI(Dataset.namedGraph_IRI);
         IRI dngPred = vf.createIRI(Dataset.defaultNamedGraph_IRI);
 
-        RepositoryResult<Statement> ngStmts = conn.getStatements(null, ngPred, graph);
-        while (ngStmts.hasNext()) {
-            if (!ngStmts.next().getSubject().equals(dataset)) {
-                ngStmts.close();
-                return false;
-            }
-        }
-        ngStmts.close();
-
-        RepositoryResult<Statement> dngStmts = conn.getStatements(null, dngPred, graph);
-        while (dngStmts.hasNext()) {
-            if (!dngStmts.next().getSubject().equals(dataset)) {
-                dngStmts.close();
-                return false;
-            }
-        }
-        dngStmts.close();
-
-        return true;
+        return !hasOtherDatasetReference(conn, dataset, ngPred, graph)
+                && !hasOtherDatasetReference(conn, dataset, dngPred, graph);
     }
 
     private void deleteGraphLinks(RepositoryConnection conn, Resource dataset) {
         IRI ngPred = vf.createIRI(Dataset.namedGraph_IRI);
         IRI dngPred = vf.createIRI(Dataset.defaultNamedGraph_IRI);
-        conn.remove(dataset, ngPred, null);
-        conn.remove(dataset, dngPred, null);
+        removeDatasetGraphLinks(conn, dataset, ngPred);
+        removeDatasetGraphLinks(conn, dataset, dngPred);
+    }
+
+    private void removeDatasetMetadata(RepositoryConnection conn, Resource dataset) {
+        clearGraph(conn, dataset);
+        conn.remove(dataset, null, null);
+    }
+
+    private boolean hasOtherDatasetReference(RepositoryConnection conn, Resource dataset, IRI predicate, Value graph) {
+        String queryString = "SELECT ?dataset WHERE {"
+                + " GRAPH ?context { ?dataset <" + predicate.stringValue() + "> ?graph . }"
+                + " FILTER(?dataset != ?currentDataset)"
+                + "} LIMIT 1";
+        TupleQuery query = conn.prepareTupleQuery(queryString);
+        query.setBinding("currentDataset", dataset);
+        query.setBinding("graph", graph);
+        try (TupleQueryResult result = query.evaluate()) {
+            return result.hasNext();
+        }
+    }
+
+    private List<Value> getLinkedGraphs(RepositoryConnection conn, Resource dataset, IRI predicate) {
+        List<Value> graphs = new ArrayList<>();
+        String queryString = "SELECT ?graph WHERE {"
+                + " GRAPH ?dataset { ?dataset <" + predicate.stringValue() + "> ?graph . }"
+                + "}";
+        TupleQuery query = conn.prepareTupleQuery(queryString);
+        query.setBinding("dataset", dataset);
+        try (TupleQueryResult result = query.evaluate()) {
+            result.forEach(bindings -> graphs.add(bindings.getValue("graph")));
+        }
+        return graphs;
+    }
+
+    private void removeDatasetGraphLinks(RepositoryConnection conn, Resource dataset, IRI predicate) {
+        String updateString = "DELETE { GRAPH ?dataset { ?dataset <" + predicate.stringValue() + "> ?graph . } }"
+                + " WHERE { GRAPH ?dataset { ?dataset <" + predicate.stringValue() + "> ?graph . } }";
+        Update update = conn.prepareUpdate(updateString);
+        update.setBinding("dataset", dataset);
+        update.execute();
+    }
+
+    private void clearIriGraph(RepositoryConnection conn, IRI graph) {
+        Update update = conn.prepareUpdate("DELETE { GRAPH ?graph { ?s ?p ?o } }"
+                + " WHERE { GRAPH ?graph { ?s ?p ?o } }");
+        update.setBinding("graph", graph);
+        update.execute();
     }
 }

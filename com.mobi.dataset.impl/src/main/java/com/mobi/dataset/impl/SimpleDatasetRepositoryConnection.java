@@ -176,7 +176,11 @@ public class SimpleDatasetRepositoryConnection extends RepositoryConnectionWrapp
         Set<Resource> graphs = getGraphsSet();
 
         if (varargsPresent(contexts)) {
-            graphs.retainAll(Arrays.asList(contexts));
+            Set<Resource> requestedGraphs = new HashSet<>(Arrays.asList(contexts));
+            graphs.retainAll(requestedGraphs);
+            if (requestedGraphs.contains(getDataset())) {
+                graphs.add(getDataset());
+            }
             getDelegate().remove(stmt, graphs.toArray(new Resource[0]));
         } else {
             removeSingleStatement(stmt, graphs);
@@ -197,7 +201,11 @@ public class SimpleDatasetRepositoryConnection extends RepositoryConnectionWrapp
         graphs.add(systemDefaultNG);
 
         if (varargsPresent(contexts)) {
-            graphs.retainAll(Arrays.asList(contexts));
+            Set<Resource> requestedGraphs = new HashSet<>(Arrays.asList(contexts));
+            graphs.retainAll(requestedGraphs);
+            if (requestedGraphs.contains(getDataset())) {
+                graphs.add(getDataset());
+            }
             getDelegate().remove(statements, graphs.toArray(new Resource[0]));
         } else {
             statements.forEach(stmt -> removeSingleStatement(stmt, graphs));
@@ -216,7 +224,11 @@ public class SimpleDatasetRepositoryConnection extends RepositoryConnectionWrapp
 
         Set<Resource> graphs = getGraphsSet();
         if (varargsPresent(contexts)) {
-            graphs.retainAll(Arrays.asList(contexts));
+            Set<Resource> requestedGraphs = new HashSet<>(Arrays.asList(contexts));
+            graphs.retainAll(requestedGraphs);
+            if (requestedGraphs.contains(getDataset())) {
+                graphs.add(getDataset());
+            }
             getDelegate().remove(subject, predicate, object, graphs.toArray(new Resource[0]));
         } else {
             getDelegate().remove(subject, predicate, object, getSystemDefaultNamedGraph());
@@ -249,7 +261,11 @@ public class SimpleDatasetRepositoryConnection extends RepositoryConnectionWrapp
     public long size(Resource... contexts) throws RepositoryException {
         Set<Resource> graphs = getGraphsSet();
         if (varargsPresent(contexts)) {
-            graphs.retainAll(Arrays.asList(contexts));
+            Set<Resource> requestedGraphs = new HashSet<>(Arrays.asList(contexts));
+            graphs.retainAll(requestedGraphs);
+            if (requestedGraphs.contains(getDataset())) {
+                graphs.add(getDataset());
+            }
         }
 
         if (graphs.size() == 0) {
@@ -302,7 +318,11 @@ public class SimpleDatasetRepositoryConnection extends RepositoryConnectionWrapp
                                                      Resource... contexts) throws RepositoryException {
         Set<Resource> graphs = getGraphsSet();
         if (varargsPresent(contexts)) {
-            graphs.retainAll(Arrays.asList(contexts));
+            Set<Resource> requestedGraphs = new HashSet<>(Arrays.asList(contexts));
+            graphs.retainAll(requestedGraphs);
+            if (requestedGraphs.contains(getDataset())) {
+                graphs.add(getDataset());
+            }
         }
 
         return getDelegate().getStatements(subject, predicate, object, graphs.toArray(new Resource[0]));
