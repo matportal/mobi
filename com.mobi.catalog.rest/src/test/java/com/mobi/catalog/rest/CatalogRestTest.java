@@ -3680,7 +3680,18 @@ public class CatalogRestTest extends MobiRestTestCXF {
 
         Response response = target().path(CATALOG_URL_LOCAL + "/records/" + encode(ERROR_IRI) + "/in-progress-commit")
                 .request().get();
-        assertEquals(404, response.getStatus());
+        assertEquals(200, response.getStatus());
+        verify(commitManager).getInProgressCommitOpt(eq(vf.createIRI(LOCAL_IRI)), eq(vf.createIRI(ERROR_IRI)), any(User.class), any(RepositoryConnection.class));
+        verify(differenceManager, times(0)).getCommitDifference(any(Resource.class), any(RepositoryConnection.class));
+        try {
+            ObjectNode result = mapper.readValue(response.readEntity(String.class), ObjectNode.class);
+            assertTrue(result.has("additions"));
+            assertTrue(result.has("deletions"));
+            isJsonld(result.get("additions"));
+            isJsonld(result.get("deletions"));
+        } catch (Exception e) {
+            fail("Expected no exception, but got: " + e.getMessage());
+        }
     }
 
     @Test

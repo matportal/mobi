@@ -539,7 +539,7 @@ public class CatalogRest {
             @Parameter(description = "String representing the Record ID", required = true)
             @PathParam("recordId") String recordId) {
         try (RepositoryConnection conn = configProvider.getRepository().getConnection()) {
-            Record record = recordManager.getRecordOpt(vf.createIRI(catalogId), vf.createIRI(recordId),
+            Record record = recordManager.getRecordOpt(iriFromPathParam(catalogId), iriFromPathParam(recordId),
                     factoryRegistry.getFactoryOfType(Record.class).get(), conn).orElseThrow(() ->
                     ErrorUtils.sendError("Record " + recordId + COULD_NOT_BE_FOUND, Response.Status.NOT_FOUND));
             return Response.ok(modelToSkolemizedJsonld(removeContext(record.getModel()),
@@ -2002,7 +2002,7 @@ public class CatalogRest {
             OrmFactory<Branch> branchOrmFactory = factoryRegistry.getFactoryOfType(Branch.class)
                     .orElseThrow(() -> new MobiException("Branch factory not found"));
             Resource branchIRI = vf.createIRI(checkBranchId(catalogId, recordId, branchId, conn));
-            Branch branch = branchManager.getBranch(vf.createIRI(catalogId), vf.createIRI(recordId),
+            Branch branch = branchManager.getBranch(iriFromPathParam(catalogId), iriFromPathParam(recordId),
                     branchIRI, branchOrmFactory, conn);
             return Response.ok(thingToSkolemizedObjectNode(branch, Branch.TYPE, bNodeService)
                     .toString()).build();
@@ -2322,8 +2322,8 @@ public class CatalogRest {
             @DefaultValue("jsonld") @QueryParam("format") String format) {
         long start = System.currentTimeMillis();
         try (RepositoryConnection conn = configProvider.getRepository().getConnection()) {
-            Resource catalogIRI = vf.createIRI(catalogId);
-            Resource recordIRI = vf.createIRI(recordId);
+            Resource catalogIRI = iriFromPathParam(catalogId);
+            Resource recordIRI = iriFromPathParam(recordId);
             Resource branchIRI = vf.createIRI(checkBranchId(catalogId, recordId, branchId, conn));
             Resource commitIRI = vf.createIRI(checkCommitId(catalogId, recordId, branchIRI.stringValue(), commitId, conn));
             Commit commit = commitManager.getCommit(catalogIRI, recordIRI, branchIRI, commitIRI, conn).orElseThrow(() ->
@@ -2840,10 +2840,15 @@ public class CatalogRest {
             @DefaultValue("jsonld") @QueryParam("format") String format) {
         try (RepositoryConnection conn = configProvider.getRepository().getConnection()) {
             User activeUser = getActiveUser(servletRequest, engineManager);
-            InProgressCommit inProgressCommit = commitManager.getInProgressCommitOpt(vf.createIRI(catalogId),
-                    vf.createIRI(recordId), activeUser, conn).orElseThrow(() ->
-                    ErrorUtils.sendError("InProgressCommit could not be found", Response.Status.NOT_FOUND));
-            return Response.ok(getCommitDifferenceObject(inProgressCommit.getResource(), format, conn).toString(),
+            Optional<InProgressCommit> inProgressCommit = commitManager.getInProgressCommitOpt(
+                    iriFromPathParam(catalogId), iriFromPathParam(recordId), activeUser, conn);
+            ObjectNode difference = inProgressCommit
+                    .map(commit -> getCommitDifferenceObject(commit.getResource(), format, conn))
+                    .orElseGet(() -> getDifferenceJson(new Difference.Builder()
+                            .additions(mf.createEmptyModel())
+                            .deletions(mf.createEmptyModel())
+                            .build(), format));
+            return Response.ok(difference.toString(),
                     MediaType.APPLICATION_JSON).build();
         } catch (IllegalArgumentException ex) {
             throw ErrorUtils.sendError(ex, ex.getMessage(), Response.Status.BAD_REQUEST);
@@ -3244,11 +3249,49 @@ public class CatalogRest {
      */
     private String checkBranchId(String catalogId, String recordId, String branchId, RepositoryConnection conn) {
         if ("master".equals(branchId.toLowerCase().trim())) {
-            MasterBranch branch = branchManager.getMasterBranch(vf.createIRI(catalogId), vf.createIRI(recordId), conn);
+            MasterBranch branch = branchManager.getMasterBranch(iriFromPathParam(catalogId), iriFromPathParam(recordId), conn);
             return branch.getResource().stringValue();
         } else {
-            return branchId;
+            return normalizePathIri(branchId);
         }
+    }
+
+    private IRI iriFromPathParam(String value) {
+        return vf.createIRI(normalizePathIri(value));
+    }
+
+    private String normalizePathIri(String value) {
+        if (StringUtils.isBlank(value) || value.startsWith("_:")) {
+            return value;
+        }
+
+        validatePercentSequences(value);
+
+        return value.replaceFirst("^([a-zA-Z][a-zA-Z0-9+.-]*):/([^/])", "$1://$2");
+    }
+
+    private void validatePercentSequences(String value) {
+        if (value == null) {
+            return;
+        }
+        int len = value.length();
+        for (int i = 0; i < len; i++) {
+            if (value.charAt(i) == '%') {
+                if (i + 2 >= len) {
+                    throw new IllegalArgumentException("Malformed percent-encoded sequence");
+                }
+                char hex1 = value.charAt(i + 1);
+                char hex2 = value.charAt(i + 2);
+                if (!isHexDigit(hex1) || !isHexDigit(hex2)) {
+                    throw new IllegalArgumentException("Malformed percent-encoded sequence");
+                }
+                i += 2;
+            }
+        }
+    }
+
+    private boolean isHexDigit(char c) {
+        return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
     }
 
     /**

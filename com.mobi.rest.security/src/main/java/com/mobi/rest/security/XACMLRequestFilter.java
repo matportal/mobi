@@ -253,16 +253,16 @@ public class XACMLRequestFilter implements ContainerRequestFilter {
             switch (resourceIdAnnotation.type()) {
                 case PATH:
                     validatePathParam(resourceValueStr, pathParameters, true);
-                    resourceIdIri = vf.createIRI(pathParameters.getFirst(resourceValueStr));
+                    resourceIdIri = vf.createIRI(normalizeResourceIri(pathParameters.getFirst(resourceValueStr)));
                     break;
                 case QUERY:
                     validateQueryParam(resourceValueStr, queryParameters, true);
-                    resourceIdIri = vf.createIRI(queryParameters.getFirst(resourceValueStr));
+                    resourceIdIri = vf.createIRI(normalizeResourceIri(queryParameters.getFirst(resourceValueStr)));
                     break;
                 case BODY:
                     MultivaluedMap<String, String> formMap = getFormData(context);
                     validateFormParam(resourceValueStr, formMap, true);
-                    resourceIdIri = vf.createIRI(formMap.getFirst(resourceValueStr));
+                    resourceIdIri = vf.createIRI(normalizeResourceIri(formMap.getFirst(resourceValueStr)));
                     break;
                 case PROP_PATH:
                     IRI pathStart = getPropPathStart(validatePropPathValue(resourceIdAnnotation.start()),
@@ -279,12 +279,46 @@ public class XACMLRequestFilter implements ContainerRequestFilter {
                     break;
                 case PRIMITIVE:
                 default:
-                    resourceIdIri = vf.createIRI(resourceIdAnnotation.value());
+                    resourceIdIri = vf.createIRI(normalizeResourceIri(resourceIdAnnotation.value()));
                     break;
             }
         }
 
         return resourceIdIri;
+    }
+
+    private String normalizeResourceIri(String value) {
+        if (StringUtils.isBlank(value) || value.startsWith("_:")) {
+            return value;
+        }
+
+        validatePercentSequences(value);
+
+        return value.replaceFirst("^([a-zA-Z][a-zA-Z0-9+.-]*):/([^/])", "$1://$2");
+    }
+
+    private void validatePercentSequences(String value) {
+        if (value == null) {
+            return;
+        }
+        int len = value.length();
+        for (int i = 0; i < len; i++) {
+            if (value.charAt(i) == '%') {
+                if (i + 2 >= len) {
+                    throw new IllegalArgumentException("Malformed percent-encoded sequence");
+                }
+                char hex1 = value.charAt(i + 1);
+                char hex2 = value.charAt(i + 2);
+                if (!isHexDigit(hex1) || !isHexDigit(hex2)) {
+                    throw new IllegalArgumentException("Malformed percent-encoded sequence");
+                }
+                i += 2;
+            }
+        }
+    }
+
+    private boolean isHexDigit(char c) {
+        return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
     }
 
     private Literal getLiteral(String value, String datatype) {

@@ -3055,7 +3055,7 @@ public class OntologyRest {
      * @return the proper JSON result described above.
      */
     @GET
-    @Path("{recordId}/entity-usages/{entityIri}")
+    @Path("{recordId}/entity-usages/{entityIri:.+}")
     @Produces(MediaType.APPLICATION_JSON)
     @RolesAllowed("user")
     @Operation(
@@ -3089,7 +3089,7 @@ public class OntologyRest {
                     conn)
                     .orElseThrow(() -> ErrorUtils.sendError(ONTOLOGY_NOT_FOUND,
                             Response.Status.BAD_REQUEST));
-            Resource entityIRI = vf.createIRI(entityIRIStr);
+            Resource entityIRI = vf.createIRI(normalizeDecodedHttpIriPath(entityIRIStr));
             if (queryType.equals("construct")) {
                 Model results = ontology.constructEntityUsages(entityIRI);
                 return Response.ok(modelToJsonld(results)).build();
@@ -3100,6 +3100,8 @@ public class OntologyRest {
                 throw ErrorUtils.sendError("The queryType parameter is not select or construct as expected.",
                         Response.Status.BAD_REQUEST);
             }
+        } catch (IllegalArgumentException ex) {
+            throw ErrorUtils.sendError(ex, ex.getMessage(), Response.Status.BAD_REQUEST);
         } catch (MobiException e) {
             throw ErrorUtils.sendError(e, e.getMessage(), Response.Status.INTERNAL_SERVER_ERROR);
         }
@@ -3270,7 +3272,7 @@ public class OntologyRest {
      * @return The RDF triples for a specified entity including all of is transitively attached Blank Nodes.
      */
     @GET
-    @Path("{recordId}/entities/{entityId}")
+    @Path("{recordId}/entities/{entityId:.+}")
     @Produces({MediaType.APPLICATION_JSON, MediaType.TEXT_PLAIN})
     @RolesAllowed("user")
     @Operation(
@@ -3312,12 +3314,14 @@ public class OntologyRest {
                     applyInProgressCommit, conn).orElseThrow(() -> ErrorUtils.sendError(
                             ONTOLOGY_NOT_FOUND, Response.Status.BAD_REQUEST));
 
-            IRI entity = vf.createIRI(entityIdStr);
+            IRI entity = vf.createIRI(normalizeDecodedHttpIriPath(entityIdStr));
             String queryString = GET_ENTITY_QUERY.replace("%ENTITY%", "<" + entity.stringValue() + ">");
 
             return getResponseBuilderForGraphQuery(ontology, queryString, includeImports, format.equals(JSONLD),
                     format).type(format.equals(JSONLD) ? MediaType.APPLICATION_JSON_TYPE : MediaType.TEXT_PLAIN_TYPE)
                     .build();
+        } catch (IllegalArgumentException ex) {
+            throw ErrorUtils.sendError(ex, ex.getMessage(), Response.Status.BAD_REQUEST);
         } catch (MobiException ex) {
             throw ErrorUtils.sendError(ex, ex.getMessage(), Response.Status.INTERNAL_SERVER_ERROR);
         }
@@ -4311,6 +4315,46 @@ public class OntologyRest {
      */
     private Model getModelFromJson(String json) {
         return jsonldToModel(json);
+    }
+
+    /**
+     * Reconstructs HTTP IRIs when an upstream proxy decodes escaped slashes in path parameters.
+     *
+     * @param resourceId the path parameter value to normalize.
+     * @return the normalized resource ID.
+     */
+    private String normalizeDecodedHttpIriPath(String resourceId) {
+        if (StringUtils.isBlank(resourceId) || resourceId.startsWith("_:")) {
+            return resourceId;
+        }
+
+        validatePercentSequences(resourceId);
+
+        return resourceId.replaceFirst("^([a-zA-Z][a-zA-Z0-9+.-]*):/([^/])", "$1://$2");
+    }
+
+    private void validatePercentSequences(String value) {
+        if (value == null) {
+            return;
+        }
+        int len = value.length();
+        for (int i = 0; i < len; i++) {
+            if (value.charAt(i) == '%') {
+                if (i + 2 >= len) {
+                    throw new IllegalArgumentException("Malformed percent-encoded sequence");
+                }
+                char hex1 = value.charAt(i + 1);
+                char hex2 = value.charAt(i + 2);
+                if (!isHexDigit(hex1) || !isHexDigit(hex2)) {
+                    throw new IllegalArgumentException("Malformed percent-encoded sequence");
+                }
+                i += 2;
+            }
+        }
+    }
+
+    private boolean isHexDigit(char c) {
+        return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
     }
 
     /**
