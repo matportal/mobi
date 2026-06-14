@@ -64,4 +64,20 @@ public @interface SPARQLRepositoryConfig {
      */
     @AttributeDefinition(required = false, name = "updateEndpointUrl", description = "The SPARQL UPDATE Endpoint URL")
     String updateEndpointUrl();
+
+    /**
+     * Whether RDF4J should retrieve statement graph information in statement API calls.
+     *
+     * @return True if quad mode should be enabled.
+     */
+    @AttributeDefinition(required = false, name = "quadMode", description = "Whether RDF4J quad mode is enabled")
+    boolean quadMode() default true;
+
+    /**
+     * Whether this repository should advertise write support.
+     *
+     * @return True if the backing SPARQL endpoint accepts updates.
+     */
+    @AttributeDefinition(required = false, name = "writable", description = "Whether the SPARQL repository is writable")
+    boolean writable() default false;
 }

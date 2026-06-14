@@ -55,6 +55,16 @@ class SPARQLRepositoryWrapperSpec extends Specification {
             }
 
             @Override
+            boolean quadMode() {
+                return true
+            }
+
+            @Override
+            boolean writable() {
+                return false
+            }
+
+            @Override
             Class<? extends Annotation> annotationType() {
                 return null
             }
@@ -91,6 +101,16 @@ class SPARQLRepositoryWrapperSpec extends Specification {
             @Override
             String updateEndpointUrl() {
                 return "http://test.com/sparql/statements"
+            }
+
+            @Override
+            boolean quadMode() {
+                return true
+            }
+
+            @Override
+            boolean writable() {
+                return false
             }
 
             @Override
@@ -133,6 +153,16 @@ class SPARQLRepositoryWrapperSpec extends Specification {
             }
 
             @Override
+            boolean quadMode() {
+                return true
+            }
+
+            @Override
+            boolean writable() {
+                return false
+            }
+
+            @Override
             Class<? extends Annotation> annotationType() {
                 return null
             }
@@ -145,5 +175,95 @@ class SPARQLRepositoryWrapperSpec extends Specification {
 
         then:
         noExceptionThrown()
+    }
+
+    def "Writable configuration controls repository writability"() {
+        setup:
+        def propsTrue = new SPARQLRepositoryConfig() {
+
+            @Override
+            String id() {
+                return "test-true"
+            }
+
+            @Override
+            String title() {
+                return "test repo true"
+            }
+
+            @Override
+            String endpointUrl() {
+                return "http://localhost/sparql"
+            }
+
+            @Override
+            String updateEndpointUrl() {
+                return ""
+            }
+
+            @Override
+            boolean quadMode() {
+                return false
+            }
+
+            @Override
+            boolean writable() {
+                return true
+            }
+
+            @Override
+            Class<? extends Annotation> annotationType() {
+                return null
+            }
+        }
+
+        def propsFalse = new SPARQLRepositoryConfig() {
+
+            @Override
+            String id() {
+                return "test-false"
+            }
+
+            @Override
+            String title() {
+                return "test repo false"
+            }
+
+            @Override
+            String endpointUrl() {
+                return "http://localhost/sparql"
+            }
+
+            @Override
+            String updateEndpointUrl() {
+                return ""
+            }
+
+            @Override
+            boolean quadMode() {
+                return false
+            }
+
+            @Override
+            boolean writable() {
+                return false
+            }
+
+            @Override
+            Class<? extends Annotation> annotationType() {
+                return null
+            }
+        }
+
+        def serviceTrue = new SPARQLRepositoryWrapper()
+        def serviceFalse = new SPARQLRepositoryWrapper()
+
+        when:
+        serviceTrue.start(propsTrue)
+        serviceFalse.start(propsFalse)
+
+        then:
+        serviceTrue.isWritable()
+        !serviceFalse.isWritable()
     }
 }

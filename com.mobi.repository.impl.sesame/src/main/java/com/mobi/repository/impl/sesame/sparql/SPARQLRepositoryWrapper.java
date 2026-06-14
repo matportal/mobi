@@ -56,18 +56,20 @@ public class SPARQLRepositoryWrapper extends OsgiRepositoryWrapper {
     protected void start(final SPARQLRepositoryConfig config) {
         RepositoryConfigHelper.validateBaseParams(config.id(), config.title());
         RepositoryConfigHelper.validateUrl(config.endpointUrl(), "endpointUrl");
-        if ("".equals(config.updateEndpointUrl()) || config.updateEndpointUrl() != null) {
+        boolean hasUpdateEndpoint = config.updateEndpointUrl() != null && !config.updateEndpointUrl().isEmpty();
+        if (hasUpdateEndpoint) {
             RepositoryConfigHelper.validateUrl(config.updateEndpointUrl(), "updateEndpointUrl");
         }
 
         SPARQLRepository sesameSparqlStore;
-        if (config.updateEndpointUrl() != null) {
-            sesameSparqlStore = new SPARQLRepository(config.endpointUrl(), config.updateEndpointUrl());
+        if (hasUpdateEndpoint) {
+            sesameSparqlStore = new ConfigurableSPARQLRepository(config.endpointUrl(), config.updateEndpointUrl(),
+                    config.writable());
         } else {
-            sesameSparqlStore = new SPARQLRepository(config.endpointUrl());
+            sesameSparqlStore = new ConfigurableSPARQLRepository(config.endpointUrl(), config.writable());
         }
 
-        sesameSparqlStore.enableQuadMode(true);
+        sesameSparqlStore.enableQuadMode(config.quadMode());
         setDelegate(sesameSparqlStore);
         this.repositoryID = config.id();
         this.repositoryTitle = config.title();
@@ -108,4 +110,22 @@ public class SPARQLRepositoryWrapper extends OsgiRepositoryWrapper {
         return Optional.empty();
     }
 
+    private static class ConfigurableSPARQLRepository extends SPARQLRepository {
+        private final boolean writable;
+
+        ConfigurableSPARQLRepository(String endpointUrl, boolean writable) {
+            super(endpointUrl);
+            this.writable = writable;
+        }
+
+        ConfigurableSPARQLRepository(String endpointUrl, String updateEndpointUrl, boolean writable) {
+            super(endpointUrl, updateEndpointUrl);
+            this.writable = writable;
+        }
+
+        @Override
+        public boolean isWritable() {
+            return writable;
+        }
+    }
 }
