@@ -166,6 +166,30 @@ describe('Create Tag Modal component', function() {
           expect(component.error).toEqual('');
         });
 
+        it('uses the matching tag id when the create response is a JSON-LD tag list', async function() {
+          catalogManagerStub.createRecordTag.and.returnValue(of(JSON.stringify([
+            {
+              '@id': 'urn:old-tag',
+              'http://purl.org/dc/terms/title': [{ '@value': 'Old Tag' }]
+            },
+            {
+              '@id': 'urn:created-tag',
+              'http://purl.org/dc/terms/title': [{ '@value': 'New Tag' }]
+            }
+          ])));
+          await component.createTag();
+
+          expect(catalogManagerStub.createRecordTag).toHaveBeenCalledWith('recordId', 'catalog', this.tagConfig);
+          expect(stateStub.updateState).toHaveBeenCalledWith({
+            recordId: 'recordId',
+            branchId: undefined,
+            commitId: 'commitId',
+            tagId: 'urn:created-tag'
+          });
+          expect(matDialogRef.close).toHaveBeenCalledWith(true);
+          expect(component.error).toEqual('');
+        });
+
         it('unless an error occurs', async function() {
           stateStub.updateState.and.returnValue(throwError(error.errorMessage));
           await component.createTag();

@@ -130,6 +130,28 @@ describe('Create branch component', function() {
           expect(matDialogRef.close).toHaveBeenCalledWith(true);
           expect(toastStub.createErrorToast).not.toHaveBeenCalled();
         });
+        it('uses the matching branch id when the create response is a JSON-LD branch list', async function() {
+          catalogManagerStub.createRecordBranch.and.returnValue(of(JSON.stringify([
+            {
+              '@id': 'oldBranchId',
+              'http://purl.org/dc/terms/title': [{ '@value': 'Old Branch' }]
+            },
+            {
+              '@id': 'createdBranchId',
+              'http://purl.org/dc/terms/title': [{ '@value': 'New Branch' }]
+            }
+          ])));
+          await component.createBranch();
+
+          expect(catalogManagerStub.createRecordBranch).toHaveBeenCalledWith('recordId', 'catalog', this.branchConfig, 'commitId');
+          expect(stateStub.updateState).toHaveBeenCalledWith({
+            recordId: 'recordId',
+            branchId: 'createdBranchId',
+            commitId: 'commitId',
+            tagId: undefined
+          });
+          expect(matDialogRef.close).toHaveBeenCalledWith(true);
+        });
         it('unless an error occurs', async function() {
           stateStub.updateState.and.returnValue(throwError('Error'));
           await component.createBranch();

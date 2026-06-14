@@ -97,6 +97,17 @@ export class CreateTagModalComponent<TData extends VersionedRdfListItem> impleme
         this._cm.createRecordTag(this._state.listItem.versionedRdfRecord.recordId, this.catalogId, tagConfig).pipe(
             switchMap(response => {
                 tagId = response;
+                if (response && response.trim().startsWith('[')) {
+                    try {
+                        const tags = JSON.parse(response);
+                        const matching = tags.find(t => t['http://purl.org/dc/terms/title']?.[0]?.['@value'] === tagConfig.title);
+                        if (matching) {
+                            tagId = matching['@id'];
+                        }
+                    } catch {
+                        // Keep the original response value if the redirect list cannot be parsed.
+                    }
+                }
                 const state: VersionedRdfStateBase = {
                     recordId: this._state.listItem.versionedRdfRecord.recordId,
                     branchId: undefined,

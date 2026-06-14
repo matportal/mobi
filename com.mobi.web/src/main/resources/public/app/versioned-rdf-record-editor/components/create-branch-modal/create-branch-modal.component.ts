@@ -70,6 +70,17 @@ export class CreateBranchModalComponent<TData extends VersionedRdfListItem> {
           this._state.listItem.versionedRdfRecord.commitId).pipe(
               switchMap(response => {
                   branchId = response;
+                  if (response && response.trim().startsWith('[')) {
+                      try {
+                          const branches = JSON.parse(response);
+                          const matching = branches.find(b => b['http://purl.org/dc/terms/title']?.[0]?.['@value'] === branchConfig.title);
+                          if (matching) {
+                              branchId = matching['@id'];
+                          }
+                      } catch {
+                          // Keep the original response value if the redirect list cannot be parsed.
+                      }
+                  }
                   const state: VersionedRdfStateBase = {
                       recordId: this._state.listItem.versionedRdfRecord.recordId,
                       branchId: branchId,
