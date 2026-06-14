@@ -40,17 +40,27 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
+import org.osgi.service.cm.Configuration;
+import org.osgi.service.cm.ConfigurationAdmin;
 
+import java.io.IOException;
+import java.util.Dictionary;
+import java.util.Hashtable;
 import java.util.Map;
 import java.util.Optional;
+import javax.ws.rs.client.Entity;
+import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
 public class RepositoryRestTest extends MobiRestTestCXF {
     private AutoCloseable closeable;
     private static RepositoryRest rest;
     private static RepositoryManager repositoryManager;
+    private static ConfigurationAdmin configurationAdmin;
+    private static Configuration configuration;
 
     private static OsgiRepository repository;
     private static final String REPO_ID = "test-repo";
@@ -60,10 +70,13 @@ public class RepositoryRestTest extends MobiRestTestCXF {
     @BeforeClass
     public static void startServer() {
         repositoryManager = Mockito.mock(RepositoryManager.class);
+        configurationAdmin = Mockito.mock(ConfigurationAdmin.class);
+        configuration = Mockito.mock(Configuration.class);
         repository = Mockito.mock(OsgiRepository.class);
 
         rest = new RepositoryRest();
         rest.repositoryManager = repositoryManager;
+        rest.configurationAdmin = configurationAdmin;
 
         configureServer(rest, new UsernameTestFilter());
     }
@@ -79,12 +92,16 @@ public class RepositoryRestTest extends MobiRestTestCXF {
         when(repositoryManager.getAllRepositories()).thenReturn(Map.of(REPO_ID, repository));
         when(repositoryManager.getRepository(anyString())).thenReturn(Optional.empty());
         when(repositoryManager.getRepository(REPO_ID)).thenReturn(Optional.of(repository));
+        when(configurationAdmin.createFactoryConfiguration(anyString(), anyString())).thenReturn(configuration);
+        when(configurationAdmin.listConfigurations(anyString())).thenReturn(null);
     }
 
     @After
     public void resetMocks() throws Exception {
         closeable.close();
         reset(repositoryManager);
+        reset(configurationAdmin);
+        reset(configuration);
         reset(repository);
     }
 
@@ -126,5 +143,69 @@ public class RepositoryRestTest extends MobiRestTestCXF {
     public void getRepositoryFailureTest() {
         Response response = target().path("repositories/ERROR").request().get();
         assertEquals(response.getStatus(), 400);
+    }
+
+    @Test
+    public void createSparqlRepositoryTest() throws Exception {
+        String payload = "{"
+                + "\"id\":\"datasets-api\","
+                + "\"title\":\"Datasets API Repo\","
+                + "\"type\":\"sparql\","
+                + "\"endpointUrl\":\"http://example.org/sparql\","
+                + "\"updateEndpointUrl\":\"http://example.org/sparql\","
+                + "\"quadMode\":true,"
+                + "\"writable\":true"
+                + "}";
+
+        Response response = target().path("repositories")
+                .request()
+                .post(Entity.entity(payload, MediaType.APPLICATION_JSON_TYPE));
+        assertEquals(201, response.getStatus());
+        verify(configurationAdmin).createFactoryConfiguration("com.mobi.service.repository.sparql", "?");
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Dictionary<String, Object>> propsCaptor = ArgumentCaptor.forClass(Dictionary.class);
+        verify(configuration).update(propsCaptor.capture());
+        Dictionary<String, Object> props = propsCaptor.getValue();
+        assertEquals("datasets-api", props.get("id"));
+        assertEquals("Datasets API Repo", props.get("title"));
+        assertEquals("http://example.org/sparql", props.get("endpointUrl"));
+        assertEquals("http://example.org/sparql", props.get("updateEndpointUrl"));
+        assertEquals(true, props.get("quadMode"));
+        assertEquals(true, props.get("writable"));
+    }
+
+    @Test
+    public void createSparqlRepositoryMissingEndpointTest() {
+        String payload = "{"
+                + "\"id\":\"datasets-api\","
+                + "\"title\":\"Datasets API Repo\","
+                + "\"type\":\"sparql\""
+                + "}";
+
+        Response response = target().path("repositories")
+                .request()
+                .post(Entity.entity(payload, MediaType.APPLICATION_JSON_TYPE));
+        assertEquals(400, response.getStatus());
+    }
+
+    @Test
+    public void deleteRepositorySuccessTest() throws Exception {
+        Configuration deleteConfig = Mockito.mock(Configuration.class);
+        Dictionary<String, Object> props = new Hashtable<>();
+        props.put("id", "datasets-api");
+        when(deleteConfig.getProperties()).thenReturn(props);
+        when(deleteConfig.getFactoryPid()).thenReturn("com.mobi.service.repository.sparql");
+        when(configurationAdmin.listConfigurations(anyString())).thenReturn(new Configuration[] { deleteConfig });
+
+        Response response = target().path("repositories/datasets-api").request().delete();
+        assertEquals(204, response.getStatus());
+        verify(deleteConfig).delete();
+    }
+
+    @Test
+    public void deleteProtectedRepositoryFailureTest() {
+        Response response = target().path("repositories/system").request().delete();
+        assertEquals(400, response.getStatus());
     }
 }

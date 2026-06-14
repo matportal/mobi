@@ -27,6 +27,7 @@ import { catchError } from 'rxjs/operators';
 
 import { REST_PREFIX } from '../../constants';
 import { ProgressSpinnerService } from '../components/progress-spinner/services/progressSpinner.service';
+import { RepositoryCreateConfig } from '../models/repositoryCreateConfig.interface';
 import { Repository } from '../models/repository.interface';
 import { handleError } from '../utility';
 
@@ -54,6 +55,28 @@ export class RepositoryManagerService {
      */
     getRepository(id: string): Observable<Repository> {
         return this.spinnerSvc.track(this.http.get<Repository>(`${this.prefix}/${encodeURIComponent(id)}`))
+            .pipe(catchError(handleError));
+    }
+
+    /**
+     * Calls the POST /repositories endpoint to create a new configured repository.
+     *
+     * @param {RepositoryCreateConfig} config The repository configuration to create
+     * @returns {Observable<Repository>} An Observable with the created repository metadata
+     */
+    createRepository(config: RepositoryCreateConfig): Observable<Repository> {
+        return this.spinnerSvc.track(this.http.post<Repository>(this.prefix, config))
+            .pipe(catchError(handleError));
+    }
+
+    /**
+     * Calls the DELETE /repositories/{id} endpoint to delete an existing configured repository.
+     *
+     * @param {string} id The id of a repository to delete
+     * @returns {Observable<null>} An Observable indicating completion of the delete
+     */
+    deleteRepository(id: string): Observable<null> {
+        return this.spinnerSvc.track(this.http.delete<null>(`${this.prefix}/${encodeURIComponent(id)}`))
             .pipe(catchError(handleError));
     }
 }

@@ -26,6 +26,7 @@ import { TestBed } from '@angular/core/testing';
 import { MockProvider } from 'ng-mocks';
 
 import { cleanStylesFromDOM } from '../../../test/ts/Shared';
+import { RepositoryCreateConfig } from '../models/repositoryCreateConfig.interface';
 import { ProgressSpinnerService } from '../components/progress-spinner/services/progressSpinner.service';
 import { Repository } from '../models/repository.interface';
 import { RepositoryManagerService } from './repositoryManager.service';
@@ -45,6 +46,15 @@ describe('Repository Manager service', function() {
         id: 'repo2',
         title: 'Repository 2',
         type: 'memory'
+    };
+    const createConfig: RepositoryCreateConfig = {
+        id: 'sparql-dev',
+        title: 'SPARQL Dev',
+        type: 'sparql',
+        endpointUrl: 'http://example.org/sparql',
+        updateEndpointUrl: 'http://example.org/sparql',
+        quadMode: true,
+        writable: true
     };
 
     beforeEach(async () => {
@@ -101,6 +111,36 @@ describe('Repository Manager service', function() {
                 .subscribe(response => expect(response).toEqual(repo1),() => fail('Promise should have resolved'));
             const request = httpMock.expectOne({url: `${service.prefix}/${repo1.id}`, method: 'GET'});
             request.flush(repo1);
+        });
+    });
+    describe('should create a repository', function() {
+        it('unless an error occurs', function() {
+            service.createRepository(createConfig)
+                .subscribe(() => fail('Promise should have rejected'), (response) => expect(response).toEqual(error));
+            const request = httpMock.expectOne({ url: service.prefix, method: 'POST' });
+            expect(request.request.body).toEqual(createConfig);
+            request.flush('flush', { status: 400, statusText: error });
+        });
+        it('successfully', function() {
+            service.createRepository(createConfig)
+                .subscribe((response) => expect(response).toEqual(repo1), () => fail('Promise should have resolved'));
+            const request = httpMock.expectOne({ url: service.prefix, method: 'POST' });
+            expect(request.request.body).toEqual(createConfig);
+            request.flush(repo1);
+        });
+    });
+    describe('should delete a repository', function() {
+        it('unless an error occurs', function() {
+            service.deleteRepository(repo1.id)
+                .subscribe(() => fail('Promise should have rejected'), (response) => expect(response).toEqual(error));
+            const request = httpMock.expectOne({ url: `${service.prefix}/${repo1.id}`, method: 'DELETE' });
+            request.flush('flush', { status: 400, statusText: error });
+        });
+        it('successfully', function() {
+            service.deleteRepository(repo1.id)
+                .subscribe(() => expect(true).toBeTrue(), () => fail('Promise should have resolved'));
+            const request = httpMock.expectOne({ url: `${service.prefix}/${repo1.id}`, method: 'DELETE' });
+            request.flush(null);
         });
     });
 });

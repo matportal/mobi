@@ -24,9 +24,17 @@ import { DebugElement } from '@angular/core';
 import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
+import { ReactiveFormsModule } from '@angular/forms';
+import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
+import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatChipsModule } from '@angular/material/chips';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatIconModule } from '@angular/material/icon';
+import { MatInputModule } from '@angular/material/input';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { MatSelectModule } from '@angular/material/select';
+import { MatTooltipModule } from '@angular/material/tooltip';
 
 import { of, throwError } from 'rxjs';
 import { MockProvider } from 'ng-mocks';
@@ -92,9 +100,17 @@ describe('RepositoriesPageComponent', () => {
     await TestBed.configureTestingModule({
       imports: [
         NoopAnimationsModule,
+        ReactiveFormsModule,
+        MatButtonModule,
         MatCardModule,
+        MatCheckboxModule,
         MatChipsModule,
-        MatProgressBarModule
+        MatFormFieldModule,
+        MatIconModule,
+        MatInputModule,
+        MatProgressBarModule,
+        MatSelectModule,
+        MatTooltipModule
       ],
       declarations: [RepositoriesPageComponent],
       providers: [
@@ -105,6 +121,8 @@ describe('RepositoriesPageComponent', () => {
 
     repositoryManagerStub = TestBed.inject(RepositoryManagerService) as jasmine.SpyObj<RepositoryManagerService>;
     repositoryManagerStub.getRepositories.and.returnValue(of([native1, native2, native3, native4, memory1, http1, sparql1]));
+    repositoryManagerStub.createRepository.and.returnValue(of(sparql1));
+    repositoryManagerStub.deleteRepository.and.returnValue(of(null));
     toastStub = TestBed.inject(ToastService) as jasmine.SpyObj<ToastService>;
     
     fixture = TestBed.createComponent(RepositoriesPageComponent);
@@ -157,6 +175,52 @@ describe('RepositoriesPageComponent', () => {
       expect(Math.trunc(component.getCapacityPercentage(http1))).toBe(0);
       expect(Math.trunc(component.getCapacityPercentage(sparql1))).toBe(0);
     });
+    it('canDelete correctly rejects protected repositories', () => {
+      expect(component.canDelete({ id: 'system', title: 'System', type: 'sparql' })).toBeFalse();
+      expect(component.canDelete({ id: 'prov', title: 'Prov', type: 'sparql' })).toBeFalse();
+      expect(component.canDelete({ id: 'ontologyCache', title: 'Cache', type: 'sparql' })).toBeFalse();
+      expect(component.canDelete({ id: 'sandbox', title: 'Sandbox', type: 'sparql' })).toBeTrue();
+    });
+    it('createRepository creates a SPARQL repository and refreshes', fakeAsync(() => {
+      component.showCreateForm = true;
+      component.createForm.setValue({
+        id: 'datasets-api',
+        title: 'Datasets API',
+        type: 'sparql',
+        endpointUrl: 'http://example.org/sparql',
+        updateEndpointUrl: 'http://example.org/sparql',
+        writable: true,
+        quadMode: true,
+        dataDir: '',
+        tripleIndexes: 'spoc,posc',
+        syncDelay: 0,
+        serverUrl: ''
+      });
+
+      component.createRepository();
+      tick();
+
+      expect(repositoryManagerStub.createRepository).toHaveBeenCalledWith({
+        id: 'datasets-api',
+        title: 'Datasets API',
+        type: 'sparql',
+        endpointUrl: 'http://example.org/sparql',
+        updateEndpointUrl: 'http://example.org/sparql',
+        writable: true,
+        quadMode: true
+      });
+      expect(toastStub.createSuccessToast).toHaveBeenCalledWith('Repository created');
+      expect(repositoryManagerStub.getRepositories).toHaveBeenCalledTimes(2);
+    }));
+    it('deleteRepository calls delete and refreshes', fakeAsync(() => {
+      spyOn(window, 'confirm').and.returnValue(true);
+      component.deleteRepository({ id: 'sandbox', title: 'Sandbox', type: 'sparql' });
+      tick();
+
+      expect(repositoryManagerStub.deleteRepository).toHaveBeenCalledWith('sandbox');
+      expect(toastStub.createSuccessToast).toHaveBeenCalledWith('Repository deleted');
+      expect(repositoryManagerStub.getRepositories).toHaveBeenCalledTimes(2);
+    }));
   });
   describe('contains the correct html', () => {
     it('for wrapping containers', function() {

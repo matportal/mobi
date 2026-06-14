@@ -21,6 +21,84 @@
   #L%
   -->
 <div class="repositories-page">
+  <div class="page-header">
+    <button mat-raised-button color="primary" (click)="toggleCreateForm()">
+      <mat-icon>{{showCreateForm ? 'close' : 'add'}}</mat-icon>
+      {{showCreateForm ? 'Cancel' : 'New Repository'}}
+    </button>
+  </div>
+
+  <mat-card *ngIf="showCreateForm" class="create-card">
+    <mat-card-title>Create Repository</mat-card-title>
+    <mat-card-content>
+      <form [formGroup]="createForm" class="create-grid">
+        <mat-form-field appearance="outline">
+          <mat-label>ID</mat-label>
+          <input matInput formControlName="id">
+          <mat-error *ngIf="createForm.controls.id.invalid">Use letters, numbers, `_.-` only (1-64 chars)</mat-error>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Title</mat-label>
+          <input matInput formControlName="title">
+        </mat-form-field>
+
+        <mat-form-field appearance="outline">
+          <mat-label>Type</mat-label>
+          <mat-select formControlName="type">
+            <mat-option value="sparql">SPARQL</mat-option>
+            <mat-option value="native">Native</mat-option>
+            <mat-option value="memory">Memory</mat-option>
+            <mat-option value="http">HTTP</mat-option>
+          </mat-select>
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" *ngIf="createForm.controls.type.value === 'sparql'">
+          <mat-label>SPARQL Endpoint URL</mat-label>
+          <input matInput formControlName="endpointUrl">
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" *ngIf="createForm.controls.type.value === 'sparql'">
+          <mat-label>SPARQL Update Endpoint URL</mat-label>
+          <input matInput formControlName="updateEndpointUrl">
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" *ngIf="createForm.controls.type.value === 'native' || createForm.controls.type.value === 'memory'">
+          <mat-label>Data Directory</mat-label>
+          <input matInput formControlName="dataDir">
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" *ngIf="createForm.controls.type.value === 'native' || createForm.controls.type.value === 'memory'">
+          <mat-label>Triple Indexes</mat-label>
+          <input matInput formControlName="tripleIndexes">
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" *ngIf="createForm.controls.type.value === 'memory'">
+          <mat-label>Sync Delay</mat-label>
+          <input matInput type="number" formControlName="syncDelay">
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" *ngIf="createForm.controls.type.value === 'http'">
+          <mat-label>HTTP Server URL</mat-label>
+          <input matInput formControlName="serverUrl">
+        </mat-form-field>
+
+        <mat-checkbox *ngIf="createForm.controls.type.value === 'sparql'" formControlName="writable">
+          Writable
+        </mat-checkbox>
+        <mat-checkbox *ngIf="createForm.controls.type.value === 'sparql'" formControlName="quadMode">
+          Quad Mode
+        </mat-checkbox>
+      </form>
+    </mat-card-content>
+    <mat-card-actions align="end">
+      <button mat-button (click)="toggleCreateForm()">Cancel</button>
+      <button mat-raised-button color="primary" [disabled]="creating" (click)="createRepository()">
+        {{creating ? 'Creating...' : 'Create'}}
+      </button>
+    </mat-card-actions>
+  </mat-card>
+
   <div class="repo-grid">
     <mat-card 
       *ngFor="let repo of repositories" 
@@ -60,6 +138,12 @@
             [class.level-medium]="repo.capacityPercentage >= 60 && repo.capacityPercentage < 85"
             [class.level-high]="repo.capacityPercentage >= 85">
           </mat-progress-bar>
+        </div>
+
+        <div class="repo-actions">
+          <button mat-icon-button [disabled]="!canDelete(repo) || deleting.has(repo.id)" (click)="deleteRepository(repo)" matTooltip="Delete Repository">
+            <mat-icon>delete</mat-icon>
+          </button>
         </div>
       </mat-card-content>
     </mat-card>

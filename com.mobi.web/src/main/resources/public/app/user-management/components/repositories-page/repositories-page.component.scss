@@ -29,6 +29,25 @@
   min-height: 100vh;
 }
 
+.page-header {
+  display: flex;
+  justify-content: flex-end;
+  max-width: 1400px;
+  margin: 0 auto 16px auto;
+}
+
+.create-card {
+  max-width: 1400px;
+  margin: 0 auto 20px auto;
+}
+
+.create-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+  align-items: center;
+}
+
 .repo-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
@@ -123,7 +142,7 @@ mat-card-content {
 
 .repo-actions {
   display: flex;
-  gap: 4px;
+  justify-content: flex-end;
   margin-top: auto;
   padding-top: 8px;
   border-top: 1px solid #e0e0e0;
@@ -171,6 +190,9 @@ mat-progress-bar {
 
 @media (max-width: 768px) {
   .repo-grid {
+    grid-template-columns: 1fr;
+  }
+  .create-grid {
     grid-template-columns: 1fr;
   }
 }
