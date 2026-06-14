@@ -59,6 +59,7 @@ export class NewDatasetOverlayComponent implements OnInit {
   });
   selectedOntologies: OntologyDetails[] = [];
   repositories: Repository[] = [];
+  private readonly internalRepositoryIds = new Set(['ontologyCache', 'prov']);
 
   constructor(private dialogRef: MatDialogRef<NewDatasetOverlayComponent>, private fb: UntypedFormBuilder,
     public dm: DatasetManagerService, private toast: ToastService, private rm: RepositoryManagerService) { }
@@ -69,7 +70,7 @@ export class NewDatasetOverlayComponent implements OnInit {
       next: (repos: Repository[]) => {
         nextCalled = true;
         this.readyFlag = true;
-        this.repositories = repos;
+        this.repositories = repos.filter(repo => !this.internalRepositoryIds.has(repo.id));
       },
       error: () => {
         nextCalled = true;

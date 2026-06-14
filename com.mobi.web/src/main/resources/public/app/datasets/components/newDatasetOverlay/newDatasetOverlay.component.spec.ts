@@ -40,6 +40,7 @@ import {
 } from '../../../../../public/test/ts/Shared';
 import { ErrorDisplayComponent } from '../../../shared/components/errorDisplay/errorDisplay.component';
 import { KeywordSelectComponent } from '../../../shared/components/keywordSelect/keywordSelect.component';
+import { Repository } from '../../../shared/models/repository.interface';
 import { DatasetManagerService } from '../../../shared/services/datasetManager.service';
 import { RepositoryManagerService } from '../../../shared/services/repositoryManager.service';
 import { ToastService } from '../../../shared/services/toast.service';
@@ -104,6 +105,22 @@ describe('New Dataset Overlay component', function () {
   });
 
   describe('controller methods', function () {
+    it('should hide internal repositories from the dataset target list', fakeAsync(function () {
+      const repos: Repository[] = [
+        { id: 'datasets', title: 'Dataset Repository', type: 'sparql' },
+        { id: 'ontologyCache', title: 'Ontology Cache Repository', type: 'sparql' },
+        { id: 'prov', title: 'Provenance Repository', type: 'sparql' },
+        { id: 'sandbox', title: 'Sandbox Repository', type: 'sparql' },
+        { id: 'system', title: 'System Repository', type: 'sparql' }
+      ];
+      repositoryManagerStub.getRepositories.and.returnValue(of(repos));
+
+      component.ngOnInit();
+      tick();
+
+      expect(component.repositories.map(repo => repo.id)).toEqual(['datasets', 'sandbox', 'system']);
+    }));
+
     describe('should create a dataset', function () {
       beforeEach(function () {
         component.createDatasetForm.setValue({
