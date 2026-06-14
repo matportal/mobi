@@ -212,6 +212,53 @@ describe('RepositoriesPageComponent', () => {
       expect(toastStub.createSuccessToast).toHaveBeenCalledWith('Repository created');
       expect(repositoryManagerStub.getRepositories).toHaveBeenCalledTimes(2);
     }));
+    it('should initialize and reset writable to false', () => {
+      expect(component.createForm.controls.writable.value).toBeFalse();
+
+      component.createForm.controls.writable.setValue(true);
+      component.createForm.reset({
+        id: '',
+        title: '',
+        type: 'sparql',
+        endpointUrl: '',
+        updateEndpointUrl: '',
+        writable: false,
+        quadMode: true,
+        dataDir: '',
+        tripleIndexes: 'spoc,posc',
+        syncDelay: 0,
+        serverUrl: ''
+      });
+      expect(component.createForm.controls.writable.value).toBeFalse();
+    });
+    it('creates a SPARQL repository and omits blank updateEndpointUrl', fakeAsync(() => {
+      component.showCreateForm = true;
+      component.createForm.setValue({
+        id: 'datasets-api-readonly',
+        title: 'Datasets API Read-Only',
+        type: 'sparql',
+        endpointUrl: 'http://example.org/sparql',
+        updateEndpointUrl: '   ', // blank
+        writable: false,
+        quadMode: true,
+        dataDir: '',
+        tripleIndexes: 'spoc,posc',
+        syncDelay: 0,
+        serverUrl: ''
+      });
+
+      component.createRepository();
+      tick();
+
+      expect(repositoryManagerStub.createRepository).toHaveBeenCalledWith({
+        id: 'datasets-api-readonly',
+        title: 'Datasets API Read-Only',
+        type: 'sparql',
+        endpointUrl: 'http://example.org/sparql',
+        writable: false,
+        quadMode: true
+      });
+    }));
     it('deleteRepository calls delete and refreshes', fakeAsync(() => {
       spyOn(window, 'confirm').and.returnValue(true);
       component.deleteRepository({ id: 'sandbox', title: 'Sandbox', type: 'sparql' });

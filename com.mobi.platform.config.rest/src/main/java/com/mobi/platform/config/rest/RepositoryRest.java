@@ -296,7 +296,11 @@ public class RepositoryRest {
 
     private void putIfPresent(ObjectNode payload, Dictionary<String, Object> props, String key) {
         if (payload.has(key) && !payload.get(key).isNull()) {
-            props.put(key, mapper.convertValue(payload.get(key), Object.class));
+            Object val = mapper.convertValue(payload.get(key), Object.class);
+            if (val instanceof String && ((String) val).trim().isEmpty()) {
+                return;
+            }
+            props.put(key, val);
         }
     }
 

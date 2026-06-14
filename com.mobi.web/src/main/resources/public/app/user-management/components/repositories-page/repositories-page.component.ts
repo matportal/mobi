@@ -51,7 +51,7 @@ export class RepositoriesPageComponent implements OnInit {
     type: ['sparql', [Validators.required]],
     endpointUrl: [''],
     updateEndpointUrl: [''],
-    writable: [true],
+    writable: [false],
     quadMode: [true],
     dataDir: [''],
     tripleIndexes: ['spoc,posc'],
@@ -99,7 +99,10 @@ export class RepositoriesPageComponent implements OnInit {
     const payload: RepositoryCreateConfig = { id, title, type };
     if (type === 'sparql') {
       payload.endpointUrl = this.createForm.controls.endpointUrl.value.trim();
-      payload.updateEndpointUrl = this.createForm.controls.updateEndpointUrl.value.trim();
+      const updateUrl = this.createForm.controls.updateEndpointUrl.value.trim();
+      if (updateUrl) {
+        payload.updateEndpointUrl = updateUrl;
+      }
       payload.writable = this.createForm.controls.writable.value;
       payload.quadMode = this.createForm.controls.quadMode.value;
       if (!payload.endpointUrl) {
@@ -136,7 +139,7 @@ export class RepositoriesPageComponent implements OnInit {
           type: 'sparql',
           endpointUrl: '',
           updateEndpointUrl: '',
-          writable: true,
+          writable: false,
           quadMode: true,
           dataDir: '',
           tripleIndexes: 'spoc,posc',

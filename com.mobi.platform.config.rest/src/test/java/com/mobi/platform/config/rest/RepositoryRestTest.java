@@ -24,6 +24,7 @@ package com.mobi.platform.config.rest;
  */
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.reset;
@@ -173,6 +174,35 @@ public class RepositoryRestTest extends MobiRestTestCXF {
         assertEquals("http://example.org/sparql", props.get("updateEndpointUrl"));
         assertEquals(true, props.get("quadMode"));
         assertEquals(true, props.get("writable"));
+    }
+
+    @Test
+    public void createSparqlRepositoryWithBlankUpdateEndpointTest() throws Exception {
+        String payload = "{"
+                + "\"id\":\"datasets-api-readonly\","
+                + "\"title\":\"Datasets API ReadOnly\","
+                + "\"type\":\"sparql\","
+                + "\"endpointUrl\":\"http://example.org/sparql\","
+                + "\"updateEndpointUrl\":\"   \","
+                + "\"quadMode\":true,"
+                + "\"writable\":false"
+                + "}";
+
+        Response response = target().path("repositories")
+                .request()
+                .post(Entity.entity(payload, MediaType.APPLICATION_JSON_TYPE));
+        assertEquals(201, response.getStatus());
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Dictionary<String, Object>> propsCaptor = ArgumentCaptor.forClass(Dictionary.class);
+        verify(configuration).update(propsCaptor.capture());
+        Dictionary<String, Object> props = propsCaptor.getValue();
+        assertEquals("datasets-api-readonly", props.get("id"));
+        assertEquals("Datasets API ReadOnly", props.get("title"));
+        assertEquals("http://example.org/sparql", props.get("endpointUrl"));
+        assertNull(props.get("updateEndpointUrl"));
+        assertEquals(true, props.get("quadMode"));
+        assertEquals(false, props.get("writable"));
     }
 
     @Test
