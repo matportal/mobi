@@ -87,6 +87,11 @@
                         <Export-Package>
                             com.mobi.setting.api;provide:=true,
                         </Export-Package>
+                        <Include-Resource>
+                            {maven-resources},
+                            get-groups.rq=../com.mobi.setting.api/src/main/resources/get-groups.rq,
+                            get-setting-definitions.rq=../com.mobi.setting.api/src/main/resources/get-setting-definitions.rq
+                        </Include-Resource>
                         <build>${maven.build.timestamp}</build>
                         <_snapshot>${maven.build.timestamp}</_snapshot>
                         <_dsannotations-options>inherit</_dsannotations-options>

@@ -50,8 +50,10 @@ import org.osgi.service.component.annotations.Reference;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 @Component(immediate = true)
@@ -115,35 +117,50 @@ public class SimpleSettingUtilsService implements SettingUtilsService {
         try (RepositoryConnection conn = configProvider.getRepository().getConnection()) {
             ontologyModel = Models.createModel("ttl", ontology).getModel();
             removeSubjectFromModel(ontologyModel, vf.createIRI(ontologyName));
-            ontologyModel.subjects().forEach(subject -> {
-                Model repoStatements = mf.createEmptyModel();
-                conn.getStatements(subject, null, null, vf.createIRI(SettingService.GRAPH)).stream()
-                        .map(statement -> vf.createStatement(statement.getSubject(), statement.getPredicate(),
-                                statement.getObject()))
-                        .forEach(repoStatements::add);
-                Model modelStatements = ontologyModel.filter(subject, null, null);
-                boolean modelsEquivalent = true;
-                if (modelStatements.size() != repoStatements.size()) {
-                    modelsEquivalent = false;
-                }
-                if (modelsEquivalent) {
-                    for (Statement modelStatement : modelStatements) {
-                        if (!repoStatements.contains(modelStatement)) {
-                            modelsEquivalent = false;
+
+            Model repoModel = mf.createEmptyModel();
+            conn.getStatements(null, null, null, vf.createIRI(SettingService.GRAPH)).stream()
+                    .map(statement -> vf.createStatement(statement.getSubject(), statement.getPredicate(),
+                            statement.getObject()))
+                    .forEach(repoModel::add);
+
+            ontologyModel.subjects().stream()
+                    .filter(subject -> !(subject instanceof BNode))
+                    .forEach(subject -> {
+                        Model repoStatements = getSubjectModelWithAttachedBNodes(repoModel, subject);
+                        Model modelStatements = getSubjectModelWithAttachedBNodes(ontologyModel, subject);
+                        if (!org.eclipse.rdf4j.model.util.Models.isomorphic(modelStatements, repoStatements)) {
+                            conn.begin();
+                            conn.remove(subject, null, null, vf.createIRI(SettingService.GRAPH));
+                            conn.add(modelStatements, vf.createIRI(SettingService.GRAPH));
+                            conn.commit();
                         }
-                    }
-                }
-                if (!modelsEquivalent) {
-                    conn.begin();
-                    conn.remove(subject, null, null, vf.createIRI(SettingService.GRAPH));
-                    conn.add(modelStatements, vf.createIRI(SettingService.GRAPH));
-                    conn.commit();
-                }
-            });
+                    });
         } catch (IOException e) {
             throw new MobiException(e);
         }
         return ontologyModel;
+    }
+
+    private Model getSubjectModelWithAttachedBNodes(Model model, Resource subject) {
+        Model subjectModel = mf.createEmptyModel();
+        addSubjectModelWithAttachedBNodes(model, subject, subjectModel, new HashSet<>());
+        return subjectModel;
+    }
+
+    private void addSubjectModelWithAttachedBNodes(Model sourceModel, Resource subject, Model targetModel,
+                                                   Set<Resource> visitedSubjects) {
+        if (!visitedSubjects.add(subject)) {
+            return;
+        }
+
+        Model subjectStatements = sourceModel.filter(subject, null, null);
+        targetModel.addAll(subjectStatements);
+        subjectStatements.objects().stream()
+                .filter(BNode.class::isInstance)
+                .map(BNode.class::cast)
+                .forEach(bnode -> addSubjectModelWithAttachedBNodes(sourceModel, bnode, targetModel,
+                        visitedSubjects));
     }
 
     private void removeAttachedBNodes(Model model, Resource subject) {
